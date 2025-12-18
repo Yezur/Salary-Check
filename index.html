@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Salarisindicatie per maand</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="print.css" media="print" />
+</head>
+<body>
+  <header class="page-header">
+    <div>
+      <h1>Maandelijkse salarisindicatie</h1>
+      <p>Bereken bruto en een eenvoudige netto-indicatie op basis van uurloon, toeslagen en handmatige vergoedingen/inhoudingen. Alles draait lokaal in je browser.</p>
+      <p class="disclaimer">Let op: netto is een vlak tarief en alleen ter indicatie. Geen loonheffingstabellen of pensioenregels.</p>
+    </div>
+    <div class="meta">
+      <span class="pill">Client-side</span>
+      <span class="pill">Geen opslag buiten je browser</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="card" aria-labelledby="rates-title">
+      <div class="section-header">
+        <h2 id="rates-title">Tarieven</h2>
+      </div>
+      <div class="grid two-cols">
+        <label for="baseRate">Basis uurloon (bruto)
+          <input type="number" id="baseRate" min="0" step="0.01" placeholder="0,00" />
+        </label>
+        <label for="standbyRate">Standby tarief (bruto/uur)
+          <input type="number" id="standbyRate" min="0" step="0.01" placeholder="1,60" />
+        </label>
+        <label for="mult150">Overwerk multiplier 150%
+          <input type="number" id="mult150" min="1" max="5" step="0.05" placeholder="1,50" />
+        </label>
+        <label for="mult200">Overwerk multiplier 200%
+          <input type="number" id="mult200" min="1" max="5" step="0.05" placeholder="2,00" />
+        </label>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="hours-title">
+      <div class="section-header">
+        <h2 id="hours-title">Uren</h2>
+        <div id="hoursWarning" class="warning" role="status" aria-live="polite" hidden>Controleer je uren: ongebruikelijk hoog.</div>
+      </div>
+      <div class="grid two-cols">
+        <label for="hNormal">Normale uren
+          <input type="number" id="hNormal" min="0" step="0.1" />
+        </label>
+        <label for="h150">Overuren 150%
+          <input type="number" id="h150" min="0" step="0.1" />
+        </label>
+        <label for="h200">Overuren 200%
+          <input type="number" id="h200" min="0" step="0.1" />
+        </label>
+        <label for="hStandby">Standby uren
+          <input type="number" id="hStandby" min="0" step="0.1" />
+        </label>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="reimb-title">
+      <div class="section-header">
+        <h2 id="reimb-title">Vergoedingen</h2>
+        <button type="button" id="addReimbursement" class="ghost">+ Toevoegen</button>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Label</th><th>Bedrag</th><th>Belastbaar</th><th></th></tr>
+          </thead>
+          <tbody id="reimbursementsTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="deduct-title">
+      <div class="section-header">
+        <h2 id="deduct-title">Inhoudingen</h2>
+        <button type="button" id="addDeduction" class="ghost">+ Toevoegen</button>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr><th>Label</th><th>Bedrag</th><th></th></tr>
+          </thead>
+          <tbody id="deductionsTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="tax-title">
+      <div class="section-header">
+        <h2 id="tax-title">Netto indicatie</h2>
+      </div>
+      <div class="tax-controls">
+        <label for="taxMode">Berekeningsmodus
+          <select id="taxMode">
+            <option value="preset">Preset</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+        <label for="taxPreset">Preset
+          <select id="taxPreset"></select>
+        </label>
+        <label for="taxCustom">Custom percentage
+          <input type="number" id="taxCustom" min="0" max="60" step="0.5" aria-describedby="taxCustomHelp" />
+          <small id="taxCustomHelp">% vlak tarief</small>
+        </label>
+      </div>
+    </section>
+
+    <section id="results" class="results">
+      <div class="card" aria-labelledby="earnings-title">
+        <div class="section-header">
+          <h2 id="earnings-title">Betalingen</h2>
+        </div>
+        <div id="earningsLines" class="line-items"></div>
+        <div class="line total"><span>Totaal bruto</span><strong id="totalsGross">€ 0,00</strong></div>
+      </div>
+
+      <div class="card" aria-labelledby="deductions-title">
+        <div class="section-header">
+          <h2 id="deductions-title">Inhoudingen</h2>
+        </div>
+        <div id="deductionLines" class="line-items"></div>
+      </div>
+
+      <div class="card" aria-labelledby="totals-title">
+        <div class="section-header">
+          <h2 id="totals-title">Totalen</h2>
+        </div>
+        <div class="line"><span>Belastbaar loon</span><strong id="totalsTaxable">€ 0,00</strong></div>
+        <div class="line"><span>Geschatte belasting</span><strong id="totalsTax">€ 0,00</strong></div>
+        <div class="line"><span>Onbelaste vergoedingen</span><strong id="totalsNonTaxable">€ 0,00</strong></div>
+        <div class="line total"><span>Netto indicatie</span><strong id="totalsNet">€ 0,00</strong></div>
+      </div>
+    </section>
+
+    <section class="actions card">
+      <button type="button" id="downloadCsv">Download CSV</button>
+      <button type="button" id="printPdf">Print / PDF</button>
+      <button type="button" id="resetForm" class="secondary">Reset</button>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
