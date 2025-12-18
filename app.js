@@ -2,6 +2,7 @@ import { DEFAULTS, TAX_PRESETS, LIMITS } from './config.js';
 
 const STORAGE_KEY = 'paycalc:v1';
 const SAVE_DEBOUNCE_MS = 300;
+const HOURS_PER_DAY = 8;
 
 const currencyFormatter = new Intl.NumberFormat('nl-NL', {
   style: 'currency',
@@ -11,6 +12,7 @@ const currencyFormatter = new Intl.NumberFormat('nl-NL', {
 const state = {
   period: 'month',
   currency: 'EUR',
+  workedDays: 0,
   rates: {
     base: 0,
     standby: DEFAULTS.standbyRate,
@@ -66,12 +68,18 @@ function loadFromStorage() {
 
 function mergeState(saved) {
   if (!saved || typeof saved !== 'object') return;
+  if (typeof saved.workedDays === 'number') {
+    state.workedDays = Math.max(0, saved.workedDays);
+  }
   state.rates = { ...state.rates, ...(saved.rates || {}) };
   state.hours = { ...state.hours, ...(saved.hours || {}) };
   state.reimbursements = Array.isArray(saved.reimbursements) ? saved.reimbursements : state.reimbursements;
   state.deductions = Array.isArray(saved.deductions) ? saved.deductions : state.deductions;
   state.tax = { ...state.tax, ...(saved.tax || {}) };
   state.tax.rate = clamp(state.tax.rate, LIMITS.taxRateMin, LIMITS.taxRateMax);
+  if (state.workedDays > 0) {
+    state.hours.normal = state.workedDays * HOURS_PER_DAY;
+  }
   if (state.tax.mode === 'preset' && state.tax.presetId) {
     const preset = TAX_PRESETS.find((p) => p.id === state.tax.presetId) || TAX_PRESETS.find((p) => p.id === DEFAULTS.taxPresetId);
     state.tax.rate = preset.rate;
@@ -231,7 +239,14 @@ function readFormIntoState() {
   state.rates.mult150 = clamp(parseNumber(document.getElementById('mult150').value) || DEFAULTS.mult150, 1, 5);
   state.rates.mult200 = clamp(parseNumber(document.getElementById('mult200').value) || DEFAULTS.mult200, 1, 5);
 
-  state.hours.normal = Math.max(0, parseNumber(document.getElementById('hNormal').value));
+  const normalHoursInput = document.getElementById('hNormal');
+  state.workedDays = Math.max(0, parseNumber(document.getElementById('workedDays').value));
+  const manualNormalHours = Math.max(0, parseNumber(normalHoursInput.value));
+  const normalFromDays = state.workedDays * HOURS_PER_DAY;
+  state.hours.normal = state.workedDays > 0 ? normalFromDays : manualNormalHours;
+  if (state.workedDays > 0) {
+    normalHoursInput.value = state.hours.normal;
+  }
   state.hours.ot150 = Math.max(0, parseNumber(document.getElementById('h150').value));
   state.hours.ot200 = Math.max(0, parseNumber(document.getElementById('h200').value));
   state.hours.standby = Math.max(0, parseNumber(document.getElementById('hStandby').value));
@@ -342,6 +357,7 @@ function resetAll() {
     mult200: DEFAULTS.mult200
   };
   state.hours = { normal: 0, ot150: 0, ot200: 0, standby: 0 };
+  state.workedDays = 0;
   state.reimbursements = [];
   state.deductions = [];
   state.tax = {
@@ -358,7 +374,10 @@ function hydrateForm() {
   document.getElementById('standbyRate').value = state.rates.standby;
   document.getElementById('mult150').value = state.rates.mult150;
   document.getElementById('mult200').value = state.rates.mult200;
-  document.getElementById('hNormal').value = state.hours.normal;
+  document.getElementById('workedDays').value = state.workedDays;
+  const normalHours = state.workedDays > 0 ? state.workedDays * HOURS_PER_DAY : state.hours.normal;
+  state.hours.normal = normalHours;
+  document.getElementById('hNormal').value = normalHours;
   document.getElementById('h150').value = state.hours.ot150;
   document.getElementById('h200').value = state.hours.ot200;
   document.getElementById('hStandby').value = state.hours.standby;
@@ -378,7 +397,7 @@ function populateTaxPresets() {
 }
 
 function attachEventListeners() {
-  document.querySelectorAll('#baseRate, #standbyRate, #mult150, #mult200, #hNormal, #h150, #h200, #hStandby').forEach((el) => {
+  document.querySelectorAll('#baseRate, #standbyRate, #mult150, #mult200, #workedDays, #hNormal, #h150, #h200, #hStandby').forEach((el) => {
     el.addEventListener('input', recalc);
     el.addEventListener('change', recalc);
   });
