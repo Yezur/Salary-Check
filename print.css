@@ -1,0 +1,27 @@
+@media print {
+  body {
+    background: #fff;
+    color: #111827;
+    padding: 0;
+  }
+  header, .card .section-header button, .actions, input, select, .ghost, button {
+    display: none !important;
+  }
+  main {
+    display: block;
+  }
+  .card {
+    box-shadow: none;
+    border: none;
+    padding: 0.5rem 0;
+  }
+  .results {
+    display: block;
+  }
+  .line, .line.total {
+    border: none;
+  }
+  #results {
+    page-break-inside: avoid;
+  }
+}
