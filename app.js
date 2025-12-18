@@ -240,12 +240,17 @@ function readFormIntoState() {
   state.rates.mult200 = clamp(parseNumber(document.getElementById('mult200').value) || DEFAULTS.mult200, 1, 5);
 
   const normalHoursInput = document.getElementById('hNormal');
-  state.workedDays = Math.max(0, parseNumber(document.getElementById('workedDays').value));
+  const workedDaysInput = document.getElementById('workedDays');
+  const workedDaysRaw = workedDaysInput.value;
   const manualNormalHours = Math.max(0, parseNumber(normalHoursInput.value));
+  state.workedDays = Math.max(0, parseNumber(workedDaysRaw));
   const normalFromDays = state.workedDays * HOURS_PER_DAY;
-  state.hours.normal = state.workedDays > 0 ? normalFromDays : manualNormalHours;
-  if (state.workedDays > 0) {
+
+  if (workedDaysRaw !== '') {
+    state.hours.normal = normalFromDays;
     normalHoursInput.value = state.hours.normal;
+  } else {
+    state.hours.normal = manualNormalHours;
   }
   state.hours.ot150 = Math.max(0, parseNumber(document.getElementById('h150').value));
   state.hours.ot200 = Math.max(0, parseNumber(document.getElementById('h200').value));
