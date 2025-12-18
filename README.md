@@ -1,4 +1,5 @@
 # Salary Check (client-side)
+https://yezur.github.io/Salary-Check/
 
 Een eenvoudige, volledig client-side webapp die per maand een bruto salaris en een vlakke netto-indicatie berekent. Alle data blijft in de browser (localStorage); er is geen backend of tracking.
 
