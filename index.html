@@ -25,9 +25,24 @@
       <div class="section-header">
         <h2 id="rates-title">Tarieven</h2>
       </div>
+      <fieldset class="pill-group" aria-label="Type salaris">
+        <legend>Salaris basis</legend>
+        <label>
+          <input type="radio" name="compensationMode" value="hourly" checked />
+          Uurloon
+        </label>
+        <label>
+          <input type="radio" name="compensationMode" value="monthly" />
+          Maandloon
+        </label>
+      </fieldset>
       <div class="grid two-cols">
         <label for="baseRate">Basis uurloon (bruto)
           <input type="number" id="baseRate" min="0" step="0.01" placeholder="0,00" />
+        </label>
+        <label for="monthlySalary">Maandloon (bruto)
+          <input type="number" id="monthlySalary" min="0" step="0.01" placeholder="0,00" />
+          <small>Overwerk gebruikt een afgeleid uurloon op basis van normale uren.</small>
         </label>
         <label for="standbyRate">Standby tarief (bruto/uur)
           <input type="number" id="standbyRate" min="0" step="0.01" placeholder="1,60" />
