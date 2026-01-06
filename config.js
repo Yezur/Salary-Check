@@ -5,6 +5,7 @@ export const DEFAULTS = {
   hourlyRate: 0,
   contractHours: 160,
   taxPresetId: "rate3582",
+  taxMode: "payroll",
   payrollPeriod: "month",
   hasLoonheffingskorting: true
 };

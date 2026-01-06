@@ -36,7 +36,7 @@ const state = {
   reimbursements: [],
   deductions: [],
   tax: {
-    mode: 'preset',
+    mode: DEFAULTS.taxMode,
     presetId: DEFAULTS.taxPresetId,
     rate: TAX_PRESETS.find((p) => p.id === DEFAULTS.taxPresetId)?.rate ?? 0.35
   }
@@ -110,6 +110,9 @@ function mergeState(saved) {
     : state.reimbursements;
   state.deductions = Array.isArray(saved.deductions) ? normalizeDeductions(saved.deductions) : state.deductions;
   state.tax = { ...state.tax, ...(saved.tax || {}) };
+  if (!['preset', 'custom', 'payroll'].includes(state.tax.mode)) {
+    state.tax.mode = DEFAULTS.taxMode;
+  }
   state.tax.rate = clamp(state.tax.rate, LIMITS.taxRateMin, LIMITS.taxRateMax);
   if (state.workedDays > 0) {
     state.hours.normal = state.workedDays * HOURS_PER_DAY;
@@ -353,7 +356,7 @@ function renderTaxUI(tax) {
   customEl.disabled = tax.mode !== 'custom';
   if (tax.mode === 'custom') {
     customEl.value = Math.round(tax.rate * 1000) / 10;
-  } else {
+  } else if (tax.mode === 'preset') {
     presetEl.value = tax.presetId || DEFAULTS.taxPresetId;
   }
 }
@@ -409,13 +412,19 @@ function readFormIntoState() {
   const modeEl = document.getElementById('taxMode');
   const presetEl = document.getElementById('taxPreset');
   const customEl = document.getElementById('taxCustom');
-  state.tax.mode = modeEl.value === 'custom' ? 'custom' : 'preset';
+  if (modeEl.value === 'custom') {
+    state.tax.mode = 'custom';
+  } else if (modeEl.value === 'preset') {
+    state.tax.mode = 'preset';
+  } else {
+    state.tax.mode = 'payroll';
+  }
 
   if (state.tax.mode === 'preset') {
     const preset = TAX_PRESETS.find((p) => p.id === presetEl.value) || TAX_PRESETS.find((p) => p.id === DEFAULTS.taxPresetId);
     state.tax.presetId = preset.id;
     state.tax.rate = preset.rate;
-  } else {
+  } else if (state.tax.mode === 'custom') {
     const customPercent = clamp(parseNumber(customEl.value), LIMITS.taxRateMin * 100, LIMITS.taxRateMax * 100);
     state.tax.rate = customPercent / 100;
     state.tax.presetId = null;
@@ -540,7 +549,7 @@ function resetAll() {
     hasLoonheffingskorting: DEFAULTS.hasLoonheffingskorting
   };
   state.tax = {
-    mode: 'preset',
+    mode: DEFAULTS.taxMode,
     presetId: DEFAULTS.taxPresetId,
     rate: TAX_PRESETS.find((p) => p.id === DEFAULTS.taxPresetId)?.rate ?? 0.35
   };
