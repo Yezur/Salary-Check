@@ -93,6 +93,7 @@ small { color: var(--muted); }
 
 .table-wrapper input[type="text"] { width: 100%; }
 .table-wrapper input[type="number"] { width: 100%; }
+.table-wrapper select { width: 100%; }
 .table-wrapper td.actions { width: 60px; text-align: right; }
 
 button {

@@ -59,6 +59,17 @@ function getId() {
   return `id-${Math.random().toString(16).slice(2)}`;
 }
 
+function normalizeDeductions(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => ({
+    id: item.id || getId(),
+    label: item.label || 'Inhouding',
+    amount: parseNumber(item.amount),
+    type: item.type === 'percent' ? 'percent' : 'fixed',
+    basis: item.basis || 'taxableWage'
+  }));
+}
+
 function loadFromStorage() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -154,6 +165,7 @@ function calculate(currentState) {
   const ot200Pay = currentState.hours.ot200 * currentState.rates.base * currentState.rates.mult200;
   const standbyPay = currentState.hours.standby * currentState.rates.standby;
   const reimbursementsTotal = currentState.reimbursements.reduce((sum, item) => sum + item.amount, 0);
+  const wageBase = basePay + ot150Pay + ot200Pay + standbyPay;
 
   const taxableReimbursements = currentState.reimbursements
     .filter((item) => item.taxable)
@@ -193,6 +205,7 @@ function calculate(currentState) {
       { label: 'Geschatte loonheffing', amount: estimatedTax },
       ...currentState.deductions.map((d) => ({ label: d.label, amount: d.amount }))
     ],
+    deductionDetails,
     totals: {
       gross: grossTotal,
       taxable: taxableWage,
@@ -255,15 +268,33 @@ function renderReimbursementsTable(items) {
   });
 }
 
-function renderDeductionsTable(items) {
+function renderDeductionsTable(items, deductionDetails = []) {
   const body = document.getElementById('deductionsTableBody');
   body.innerHTML = '';
+  const calculatedMap = new Map(deductionDetails.map((item) => [item.id, item.calculated]));
   items.forEach((item) => {
     const row = document.createElement('tr');
     row.dataset.id = item.id;
+    const type = item.type === 'percent' ? 'percent' : 'fixed';
+    const basis = item.basis || 'taxableWage';
+    const calculated = calculatedMap.get(item.id);
     row.innerHTML = `
       <td><input type="text" value="${item.label}" data-field="label" aria-label="Label" /></td>
-      <td><input type="number" step="0.01" value="${item.amount}" data-field="amount" aria-label="Bedrag" /></td>
+      <td>
+        <select data-field="type" aria-label="Type">
+          <option value="fixed" ${type === 'fixed' ? 'selected' : ''}>fixed</option>
+          <option value="percent" ${type === 'percent' ? 'selected' : ''}>percent</option>
+        </select>
+      </td>
+      <td><input type="number" step="0.01" value="${item.amount}" data-field="amount" aria-label="Bedrag of percentage" /></td>
+      <td>
+        <select data-field="basis" aria-label="Basis" ${type === 'percent' ? '' : 'disabled'}>
+          <option value="taxableWage" ${basis === 'taxableWage' ? 'selected' : ''}>taxableWage</option>
+          <option value="svWage" ${basis === 'svWage' ? 'selected' : ''}>svWage</option>
+          <option value="zvwWage" ${basis === 'zvwWage' ? 'selected' : ''}>zvwWage</option>
+        </select>
+      </td>
+      <td>${calculated === undefined ? '-' : formatCurrency(calculated)}</td>
       <td class="actions"><button type="button" class="ghost" data-action="remove">✕</button></td>
     `;
     body.appendChild(row);
@@ -302,7 +333,9 @@ function readTablesIntoState() {
     const id = row.dataset.id || getId();
     const label = row.querySelector('[data-field="label"]').value || 'Inhouding';
     const amount = parseNumber(row.querySelector('[data-field="amount"]').value);
-    return { id, label, amount };
+    const type = row.querySelector('[data-field="type"]').value === 'percent' ? 'percent' : 'fixed';
+    const basis = row.querySelector('[data-field="basis"]').value || 'taxableWage';
+    return { id, label, amount, type, basis };
   });
 }
 
@@ -363,7 +396,7 @@ function render(result) {
   renderDeductions(result.deductions);
   renderTotals(result.totals);
   renderReimbursementsTable(state.reimbursements);
-  renderDeductionsTable(state.deductions);
+  renderDeductionsTable(state.deductions, result.deductionDetails);
   renderTaxUI(state.tax);
   document.querySelector(`input[name="payrollPeriod"][value="${state.payroll.period}"]`).checked = true;
   document.getElementById('loonheffingskortingToggle').checked = state.payroll.hasLoonheffingskorting;
@@ -382,7 +415,7 @@ function addReimbursement() {
 }
 
 function addDeduction() {
-  state.deductions.push({ id: getId(), label: 'Inhouding', amount: 0 });
+  state.deductions.push({ id: getId(), label: 'Inhouding', amount: 0, type: 'fixed', basis: 'taxableWage' });
   renderDeductionsTable(state.deductions);
 }
 
@@ -519,6 +552,8 @@ function attachEventListeners() {
 
   document.getElementById('reimbursementsTableBody').addEventListener('input', recalc);
   document.getElementById('deductionsTableBody').addEventListener('input', recalc);
+  document.getElementById('reimbursementsTableBody').addEventListener('change', recalc);
+  document.getElementById('deductionsTableBody').addEventListener('change', recalc);
 
   document.getElementById('reimbursementsTableBody').addEventListener('click', (e) => {
     if (removeRow(e, '#reimbursementsTableBody', 'reimbursements')) return;
