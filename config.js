@@ -2,6 +2,7 @@ export const DEFAULTS = {
   standbyRate: 1.6,
   mult150: 1.5,
   mult200: 2.0,
+  contractHours: 160,
   taxPresetId: "rate3582",
   payrollPeriod: "month",
   hasLoonheffingskorting: true

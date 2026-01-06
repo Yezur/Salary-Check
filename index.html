@@ -11,7 +11,7 @@
   <header class="page-header">
     <div>
       <h1>Salarisindicatie per periode</h1>
-      <p>Bereken bruto en een eenvoudige netto-indicatie op basis van uurloon, toeslagen en handmatige vergoedingen/inhoudingen. Alles draait lokaal in je browser.</p>
+      <p>Bereken bruto en een eenvoudige netto-indicatie op basis van maandsalaris, toeslagen en handmatige vergoedingen/inhoudingen. Alles draait lokaal in je browser.</p>
       <p class="disclaimer">Let op: netto is een indicatie op basis van loonheffingstabellen en heffingskortingen. Geen pensioen- of overige inhoudingsregels.</p>
     </div>
     <div class="meta">
@@ -26,8 +26,11 @@
         <h2 id="rates-title">Tarieven</h2>
       </div>
       <div class="grid two-cols">
-        <label for="baseRate">Basis uurloon (bruto)
-          <input type="number" id="baseRate" min="0" step="0.01" placeholder="0,00" />
+        <label for="salaryMonthly">Maandsalaris (bruto)
+          <input type="number" id="salaryMonthly" min="0" step="0.01" placeholder="0,00" />
+        </label>
+        <label for="contractHours">Contracturen per maand
+          <input type="number" id="contractHours" min="0" step="0.1" placeholder="160" />
         </label>
         <label for="standbyRate">Standby tarief (bruto/uur)
           <input type="number" id="standbyRate" min="0" step="0.01" placeholder="1,60" />
