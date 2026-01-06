@@ -3,6 +3,7 @@ import { DEFAULTS, TAX_PRESETS, LIMITS } from './config.js';
 const STORAGE_KEY = 'paycalc:v1';
 const SAVE_DEBOUNCE_MS = 300;
 const HOURS_PER_DAY = 8;
+const OVERTIME_TAX_RATE = 0.5033;
 
 const currencyFormatter = new Intl.NumberFormat('nl-NL', {
   style: 'currency',
@@ -158,12 +159,16 @@ function calculate(currentState) {
     .reduce((sum, item) => sum + item.amount, 0);
   const nonTaxableReimbursements = reimbursementsTotal - taxableReimbursements;
 
+  const overtimePay = ot150Pay + ot200Pay;
   const baseWage = basePay + ot150Pay + ot200Pay + standbyPay;
   const grossTotal = basePay + ot150Pay + ot200Pay + standbyPay + reimbursementsTotal;
-  const taxableWage = basePay + ot150Pay + ot200Pay + standbyPay + taxableReimbursements;
+  const taxableWage = basePay + overtimePay + taxableReimbursements;
+  const baseTaxableWage = basePay + taxableReimbursements;
   const svWage = baseWage + svReimbursements;
   const zvwWage = baseWage + zvwReimbursements;
-  const estimatedTax = calculateEstimatedTax(currentState, taxableWage);
+  const baseTax = calculateEstimatedTax(currentState, baseTaxableWage);
+  const overtimeTax = overtimePay * OVERTIME_TAX_RATE;
+  const estimatedTax = baseTax + overtimeTax;
   const deductionDetails = currentState.deductions.map((item) => {
     const type = item.type === 'percent' ? 'percent' : 'fixed';
     const basis = item.basis || 'taxableWage';
@@ -182,7 +187,8 @@ function calculate(currentState) {
       { label: 'Vergoedingen', amount: reimbursementsTotal }
     ];
   const deductions = [
-      { label: 'Geschatte loonheffing', amount: estimatedTax },
+      { label: 'Loonheffing (basis)', amount: baseTax },
+      { label: 'Belasting overuren 50,33%', amount: overtimeTax },
       ...deductionDetails.map((d) => ({ label: d.label, amount: d.calculated }))
     ];
   const totalEarnings = earnings.reduce((sum, line) => sum + line.amount, 0);

@@ -117,7 +117,7 @@
         </label>
         <label for="taxCustom">Custom percentage
           <input type="number" id="taxCustom" min="0" max="60" step="0.5" aria-describedby="taxCustomHelp" />
-          <small id="taxCustomHelp">% vlak tarief</small>
+          <small id="taxCustomHelp">% vlak tarief. Standby is onbelast; overuren worden apart belast.</small>
         </label>
       </div>
     </section>
@@ -135,6 +135,7 @@
         <div class="section-header">
           <h2 id="deductions-title">Inhoudingen</h2>
         </div>
+        <small>Toont aparte regels voor loonheffing (basis) en belasting overuren 50,33%.</small>
         <div id="deductionLines" class="line-items"></div>
       </div>
 
