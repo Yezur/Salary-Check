@@ -141,10 +141,9 @@ function calculate(currentState) {
   const hourlyRate = parseNumber(currentState.salary?.hourly);
   const hourlyFromSalary = contractHours > 0 ? monthlySalary / contractHours : 0;
   const baseHourly = hourlyRate > 0 ? hourlyRate : hourlyFromSalary;
-  const overtimeHourly = hourlyRate > 0 ? hourlyRate : hourlyFromSalary;
   const basePay = monthlySalary > 0 ? monthlySalary : baseHourly * currentState.hours.normal;
-  const ot150Pay = currentState.hours.ot150 * overtimeHourly * currentState.rates.mult150;
-  const ot200Pay = currentState.hours.ot200 * overtimeHourly * currentState.rates.mult200;
+  const ot150Pay = currentState.hours.ot150 * baseHourly * currentState.rates.mult150;
+  const ot200Pay = currentState.hours.ot200 * baseHourly * currentState.rates.mult200;
   const standbyPay = currentState.hours.standby * currentState.rates.standby;
   const reimbursementsTotal = currentState.reimbursements.reduce((sum, item) => sum + item.amount, 0);
   const wageBase = basePay + ot150Pay + ot200Pay + standbyPay;
