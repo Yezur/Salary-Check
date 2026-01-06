@@ -160,10 +160,13 @@ function calculate(currentState) {
 
   const baseWage = basePay + ot150Pay + ot200Pay + standbyPay;
   const grossTotal = basePay + ot150Pay + ot200Pay + standbyPay + reimbursementsTotal;
-  const taxableWage = basePay + ot150Pay + ot200Pay + standbyPay + taxableReimbursements;
+  const baseTaxableWage = basePay + taxableReimbursements;
+  const taxableWage = baseTaxableWage;
   const svWage = baseWage + svReimbursements;
   const zvwWage = baseWage + zvwReimbursements;
-  const estimatedTax = calculateEstimatedTax(currentState, taxableWage);
+  const baseTax = calculateEstimatedTax(currentState, baseTaxableWage);
+  const overtimeTax = (ot150Pay + ot200Pay) * 0.5033;
+  const estimatedTax = baseTax + overtimeTax;
   const deductionDetails = currentState.deductions.map((item) => {
     const type = item.type === 'percent' ? 'percent' : 'fixed';
     const basis = item.basis || 'taxableWage';
@@ -182,7 +185,8 @@ function calculate(currentState) {
       { label: 'Vergoedingen', amount: reimbursementsTotal }
     ];
   const deductions = [
-      { label: 'Geschatte loonheffing', amount: estimatedTax },
+      { label: 'Loonheffing (basis)', amount: baseTax },
+      { label: 'Belasting overuren 50,33%', amount: overtimeTax },
       ...deductionDetails.map((d) => ({ label: d.label, amount: d.calculated }))
     ];
   const totalEarnings = earnings.reduce((sum, line) => sum + line.amount, 0);
@@ -199,6 +203,8 @@ function calculate(currentState) {
       taxable: taxableWage,
       svWage,
       zvwWage,
+      base_tax: baseTax,
+      overtime_tax: overtimeTax,
       est_tax: estimatedTax,
       net,
       non_taxable: nonTaxableReimbursements
@@ -434,7 +440,9 @@ function exportCSV(result) {
     ['Totaal inhoudingen', 'total', result.totals.deductions.toFixed(2)],
     ['Totaal bruto', 'total', result.totals.gross.toFixed(2)],
     ['Belastbaar loon', 'total', result.totals.taxable.toFixed(2)],
-    ['Geschatte loonheffing', 'total', result.totals.est_tax.toFixed(2)],
+    ['Loonheffing (basis)', 'total', result.totals.base_tax.toFixed(2)],
+    ['Belasting overuren 50,33%', 'total', result.totals.overtime_tax.toFixed(2)],
+    ['Totaal loonheffing', 'total', result.totals.est_tax.toFixed(2)],
     ['Netto indicatie', 'total', result.totals.net.toFixed(2)],
     ['Onbelaste vergoedingen', 'info', result.totals.non_taxable.toFixed(2)],
     ['Timestamp', 'meta', new Date().toISOString()]
@@ -571,9 +579,10 @@ function runSelfTests() {
   };
   const result = calculate(exampleState);
   const expectedGross = 3200 + (10 * 20 * 1.5) + (5 * 20 * 2) + (8 * 2) + 150;
-  const expectedTaxable = 3200 + (10 * 20 * 1.5) + (5 * 20 * 2) + 100 + (8 * 2);
+  const expectedTaxable = 3200 + 100;
   const expectedTaxRate = TAX_PRESETS.find((p) => p.id === DEFAULTS.taxPresetId).rate;
-  const expectedTax = expectedTaxable * expectedTaxRate;
+  const expectedOvertimeTax = ((10 * 20 * 1.5) + (5 * 20 * 2)) * 0.5033;
+  const expectedTax = (expectedTaxable * expectedTaxRate) + expectedOvertimeTax;
   const expectedNet = expectedGross - expectedTax - 80;
   const hourlyState = {
     salary: { monthly: 0, hourly: 20, contractHours: 160 },
@@ -585,8 +594,9 @@ function runSelfTests() {
   };
   const hourlyResult = calculate(hourlyState);
   const hourlyExpectedGross = (150 * 20) + (6 * 20 * 1.5) + (4 * 20 * 2) + (3 * 2);
-  const hourlyExpectedTaxable = (150 * 20) + (6 * 20 * 1.5) + (4 * 20 * 2) + (3 * 2);
-  const hourlyExpectedTax = hourlyExpectedTaxable * expectedTaxRate;
+  const hourlyExpectedTaxable = (150 * 20);
+  const hourlyExpectedOvertimeTax = ((6 * 20 * 1.5) + (4 * 20 * 2)) * 0.5033;
+  const hourlyExpectedTax = (hourlyExpectedTaxable * expectedTaxRate) + hourlyExpectedOvertimeTax;
   const hourlyExpectedNet = hourlyExpectedGross - hourlyExpectedTax;
   const allGood = Math.abs(result.totals.gross - expectedGross) < 0.001 &&
     Math.abs(result.totals.taxable - expectedTaxable) < 0.001 &&
