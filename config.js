@@ -3,7 +3,6 @@ export const DEFAULTS = {
   mult150: 1.5,
   mult200: 2.0,
   hourlyRate: 0,
-  contractHours: 160,
   taxPresetId: "rate3582"
 };
 
