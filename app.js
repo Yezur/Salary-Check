@@ -3,6 +3,7 @@ import { DEFAULTS, TAX_PRESETS, LIMITS } from './config.js';
 const STORAGE_KEY = 'paycalc:v1';
 const SAVE_DEBOUNCE_MS = 300;
 const HOURS_PER_DAY = 8;
+const OVERTIME_TAX_RATE = 0.5033;
 
 const currencyFormatter = new Intl.NumberFormat('nl-NL', {
   style: 'currency',
@@ -158,6 +159,7 @@ function calculate(currentState) {
     .reduce((sum, item) => sum + item.amount, 0);
   const nonTaxableReimbursements = reimbursementsTotal - taxableReimbursements;
 
+  const overtimePay = ot150Pay + ot200Pay;
   const baseWage = basePay + ot150Pay + ot200Pay + standbyPay;
   const grossTotal = basePay + ot150Pay + ot200Pay + standbyPay + reimbursementsTotal;
   const baseTaxableWage = basePay + taxableReimbursements;
