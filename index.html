@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Salarisindicatie per maand</title>
+  <title>Salarisindicatie per periode</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="print.css" media="print" />
 </head>
 <body>
   <header class="page-header">
     <div>
-      <h1>Maandelijkse salarisindicatie</h1>
+      <h1>Salarisindicatie per periode</h1>
       <p>Bereken bruto en een eenvoudige netto-indicatie op basis van uurloon, toeslagen en handmatige vergoedingen/inhoudingen. Alles draait lokaal in je browser.</p>
-      <p class="disclaimer">Let op: netto is een vlak tarief en alleen ter indicatie. Geen loonheffingstabellen of pensioenregels.</p>
+      <p class="disclaimer">Let op: netto is een indicatie op basis van loonheffingstabellen en heffingskortingen. Geen pensioen- of overige inhoudingsregels.</p>
     </div>
     <div class="meta">
       <span class="pill">Client-side</span>
@@ -100,6 +100,21 @@
         <h2 id="tax-title">Netto indicatie</h2>
       </div>
       <div class="tax-controls">
+        <fieldset class="tax-fieldset">
+          <legend>Periode loonheffing</legend>
+          <label>
+            <input type="radio" name="payrollPeriod" value="month" checked />
+            Maand
+          </label>
+          <label>
+            <input type="radio" name="payrollPeriod" value="fourWeeks" />
+            4-weken
+          </label>
+        </fieldset>
+        <label class="tax-toggle" for="loonheffingskortingToggle">
+          <input type="checkbox" id="loonheffingskortingToggle" checked />
+          Loonheffingskorting toepassen
+        </label>
         <label for="taxMode">Berekeningsmodus
           <select id="taxMode">
             <option value="preset">Preset</option>
@@ -137,7 +152,7 @@
           <h2 id="totals-title">Totalen</h2>
         </div>
         <div class="line"><span>Belastbaar loon</span><strong id="totalsTaxable">€ 0,00</strong></div>
-        <div class="line"><span>Geschatte belasting</span><strong id="totalsTax">€ 0,00</strong></div>
+        <div class="line"><span>Geschatte loonheffing</span><strong id="totalsTax">€ 0,00</strong></div>
         <div class="line"><span>Onbelaste vergoedingen</span><strong id="totalsNonTaxable">€ 0,00</strong></div>
         <div class="line total"><span>Netto indicatie</span><strong id="totalsNet">€ 0,00</strong></div>
       </div>
