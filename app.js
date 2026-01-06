@@ -141,7 +141,7 @@ function calculate(currentState) {
   const hourlyRate = parseNumber(currentState.salary?.hourly);
   const hourlyFromSalary = contractHours > 0 ? monthlySalary / contractHours : 0;
   const baseHourly = hourlyRate > 0 ? hourlyRate : hourlyFromSalary;
-  const basePay = monthlySalary > 0 ? monthlySalary : baseHourly * currentState.hours.normal;
+  const basePay = hourlyRate > 0 ? baseHourly * currentState.hours.normal : monthlySalary;
   const ot150Pay = currentState.hours.ot150 * baseHourly * currentState.rates.mult150;
   const ot200Pay = currentState.hours.ot200 * baseHourly * currentState.rates.mult200;
   const standbyPay = currentState.hours.standby * currentState.rates.standby;
