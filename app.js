@@ -1,4 +1,4 @@
-import { DEFAULTS, TAX_PRESETS, LIMITS } from './config.js';
+import { DEFAULTS, TAX_PRESETS, LIMITS, PAYROLL_TAX } from './config.js';
 
 const STORAGE_KEY = 'paycalc:v1';
 const SAVE_DEBOUNCE_MS = 300;
@@ -13,6 +13,10 @@ const state = {
   period: 'month',
   currency: 'EUR',
   workedDays: 0,
+  payroll: {
+    period: DEFAULTS.payrollPeriod,
+    hasLoonheffingskorting: DEFAULTS.hasLoonheffingskorting
+  },
   rates: {
     base: 0,
     standby: DEFAULTS.standbyRate,
@@ -71,6 +75,13 @@ function mergeState(saved) {
   if (typeof saved.workedDays === 'number') {
     state.workedDays = Math.max(0, saved.workedDays);
   }
+  if (saved.payroll && typeof saved.payroll === 'object') {
+    state.payroll = { ...state.payroll, ...saved.payroll };
+    if (!PAYROLL_TAX.periodFactors[state.payroll.period]) {
+      state.payroll.period = DEFAULTS.payrollPeriod;
+    }
+    state.payroll.hasLoonheffingskorting = Boolean(state.payroll.hasLoonheffingskorting);
+  }
   state.rates = { ...state.rates, ...(saved.rates || {}) };
   state.hours = { ...state.hours, ...(saved.hours || {}) };
   state.reimbursements = Array.isArray(saved.reimbursements) ? saved.reimbursements : state.reimbursements;
@@ -98,6 +109,43 @@ function formatCurrency(amount) {
   return currencyFormatter.format(amount);
 }
 
+function calculatePayrollTax({ taxableWage, period, hasLoonheffingskorting }) {
+  const annualFactor = PAYROLL_TAX.periodFactors[period] ?? PAYROLL_TAX.periodFactors.month;
+  const annualTaxableWage = taxableWage * annualFactor;
+
+  let annualTax = 0;
+  let previousLimit = 0;
+  PAYROLL_TAX.brackets.forEach((bracket) => {
+    const limit = bracket.upTo ?? Infinity;
+    if (annualTaxableWage > previousLimit) {
+      const taxableSlice = Math.min(annualTaxableWage, limit) - previousLimit;
+      annualTax += taxableSlice * bracket.rate;
+    }
+    previousLimit = limit;
+  });
+
+  let annualCredits = 0;
+  if (hasLoonheffingskorting) {
+    const { general, labor } = PAYROLL_TAX.credits;
+    const generalReduction = Math.max(0, (annualTaxableWage - general.phaseOutStart) * general.phaseOutRate);
+    const generalCredit = Math.max(0, general.max - generalReduction);
+
+    let laborCredit = 0;
+    if (annualTaxableWage <= labor.phaseInEnd) {
+      laborCredit = annualTaxableWage * labor.phaseInRate;
+    } else if (annualTaxableWage <= labor.plateauEnd) {
+      laborCredit = labor.max;
+    } else {
+      laborCredit = Math.max(0, labor.max - (annualTaxableWage - labor.plateauEnd) * labor.phaseOutRate);
+    }
+
+    annualCredits = Math.min(annualTax, generalCredit + laborCredit);
+  }
+
+  const annualNetTax = Math.max(0, annualTax - annualCredits);
+  return annualNetTax / annualFactor;
+}
+
 function calculate(currentState) {
   const basePay = currentState.hours.normal * currentState.rates.base;
   const ot150Pay = currentState.hours.ot150 * currentState.rates.base * currentState.rates.mult150;
@@ -112,7 +160,15 @@ function calculate(currentState) {
 
   const grossTotal = basePay + ot150Pay + ot200Pay + standbyPay + reimbursementsTotal;
   const taxableWage = basePay + ot150Pay + ot200Pay + standbyPay + taxableReimbursements;
-  const estimatedTax = taxableWage * currentState.tax.rate;
+  const payrollSettings = currentState.payroll || {
+    period: DEFAULTS.payrollPeriod,
+    hasLoonheffingskorting: DEFAULTS.hasLoonheffingskorting
+  };
+  const estimatedTax = calculatePayrollTax({
+    taxableWage,
+    period: payrollSettings.period,
+    hasLoonheffingskorting: payrollSettings.hasLoonheffingskorting
+  });
   const otherDeductions = currentState.deductions.reduce((sum, item) => sum + item.amount, 0);
   const net = grossTotal - estimatedTax - otherDeductions;
 
@@ -125,7 +181,7 @@ function calculate(currentState) {
       { label: 'Vergoedingen', amount: reimbursementsTotal }
     ],
     deductions: [
-      { label: `Geschatte belasting (${Math.round(currentState.tax.rate * 1000) / 10}%)`, amount: estimatedTax },
+      { label: 'Geschatte loonheffing', amount: estimatedTax },
       ...currentState.deductions.map((d) => ({ label: d.label, amount: d.amount }))
     ],
     totals: {
@@ -272,6 +328,9 @@ function readFormIntoState() {
   }
 
   readTablesIntoState();
+  const payrollPeriod = document.querySelector('input[name="payrollPeriod"]:checked')?.value || DEFAULTS.payrollPeriod;
+  state.payroll.period = payrollPeriod === 'fourWeeks' ? 'fourWeeks' : 'month';
+  state.payroll.hasLoonheffingskorting = document.getElementById('loonheffingskortingToggle').checked;
   toggleHoursWarning();
 }
 
@@ -289,6 +348,8 @@ function render(result) {
   renderReimbursementsTable(state.reimbursements);
   renderDeductionsTable(state.deductions);
   renderTaxUI(state.tax);
+  document.querySelector(`input[name="payrollPeriod"][value="${state.payroll.period}"]`).checked = true;
+  document.getElementById('loonheffingskortingToggle').checked = state.payroll.hasLoonheffingskorting;
 }
 
 function addReimbursement() {
@@ -321,16 +382,18 @@ function recalc() {
 }
 
 function exportCSV(result) {
+  const periodLabel = state.payroll.period === 'fourWeeks' ? '4-weken' : 'Maand';
   const rows = [
     ['label', 'type', 'amount'],
     ...result.earnings.map((line) => [line.label, 'earning', line.amount.toFixed(2)]),
     ...result.deductions.map((line) => [line.label, 'deduction', line.amount.toFixed(2)]),
     ['Totaal bruto', 'total', result.totals.gross.toFixed(2)],
     ['Belastbaar loon', 'total', result.totals.taxable.toFixed(2)],
-    ['Geschatte belasting', 'total', result.totals.est_tax.toFixed(2)],
+    ['Geschatte loonheffing', 'total', result.totals.est_tax.toFixed(2)],
     ['Netto indicatie', 'total', result.totals.net.toFixed(2)],
     ['Onbelaste vergoedingen', 'info', result.totals.non_taxable.toFixed(2)],
-    ['Belastingtarief', 'info', (state.tax.rate * 100).toFixed(1) + '%'],
+    ['Periode loonheffing', 'info', periodLabel],
+    ['Loonheffingskorting toegepast', 'info', state.payroll.hasLoonheffingskorting ? 'Ja' : 'Nee'],
     ['Timestamp', 'meta', new Date().toISOString()]
   ];
 
@@ -365,6 +428,10 @@ function resetAll() {
   state.workedDays = 0;
   state.reimbursements = [];
   state.deductions = [];
+  state.payroll = {
+    period: DEFAULTS.payrollPeriod,
+    hasLoonheffingskorting: DEFAULTS.hasLoonheffingskorting
+  };
   state.tax = {
     mode: 'preset',
     presetId: DEFAULTS.taxPresetId,
@@ -389,6 +456,8 @@ function hydrateForm() {
   renderReimbursementsTable(state.reimbursements);
   renderDeductionsTable(state.deductions);
   renderTaxUI(state.tax);
+  document.querySelector(`input[name="payrollPeriod"][value="${state.payroll.period}"]`).checked = true;
+  document.getElementById('loonheffingskortingToggle').checked = state.payroll.hasLoonheffingskorting;
 }
 
 function populateTaxPresets() {
@@ -410,6 +479,10 @@ function attachEventListeners() {
   document.getElementById('taxMode').addEventListener('change', recalc);
   document.getElementById('taxPreset').addEventListener('change', recalc);
   document.getElementById('taxCustom').addEventListener('input', recalc);
+  document.querySelectorAll('input[name="payrollPeriod"]').forEach((el) => {
+    el.addEventListener('change', recalc);
+  });
+  document.getElementById('loonheffingskortingToggle').addEventListener('change', recalc);
 
   document.getElementById('addReimbursement').addEventListener('click', () => {
     addReimbursement();
@@ -450,12 +523,16 @@ function runSelfTests() {
       { id: 'b', label: 'Bonus', amount: 100, taxable: true }
     ],
     deductions: [{ id: 'c', label: 'Pensioen', amount: 80 }],
-    tax: { rate: 0.35 }
+    payroll: { period: 'month', hasLoonheffingskorting: true }
   };
   const result = calculate(exampleState);
   const expectedGross = (160 * 20) + (10 * 20 * 1.5) + (5 * 20 * 2) + (8 * 2) + 150;
   const expectedTaxable = (160 * 20) + (10 * 20 * 1.5) + (5 * 20 * 2) + 100 + (8 * 2);
-  const expectedTax = expectedTaxable * 0.35;
+  const expectedTax = calculatePayrollTax({
+    taxableWage: expectedTaxable,
+    period: exampleState.payroll.period,
+    hasLoonheffingskorting: exampleState.payroll.hasLoonheffingskorting
+  });
   const expectedNet = expectedGross - expectedTax - 80;
   const allGood = Math.abs(result.totals.gross - expectedGross) < 0.001 &&
     Math.abs(result.totals.taxable - expectedTaxable) < 0.001 &&
