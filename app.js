@@ -1,4 +1,4 @@
-import { DEFAULTS, TAX_PRESETS, LIMITS } from './config.js';
+import { DEFAULTS, TAX_PRESETS, LIMITS, PAYROLL_TAX } from './config.js';
 
 const STORAGE_KEY = 'paycalc:v1';
 const SAVE_DEBOUNCE_MS = 300;
@@ -13,6 +13,10 @@ const state = {
   period: 'month',
   currency: 'EUR',
   workedDays: 0,
+  payroll: {
+    period: DEFAULTS.payrollPeriod,
+    hasLoonheffingskorting: DEFAULTS.hasLoonheffingskorting
+  },
   rates: {
     base: 0,
     standby: DEFAULTS.standbyRate,
@@ -82,10 +86,19 @@ function mergeState(saved) {
   if (typeof saved.workedDays === 'number') {
     state.workedDays = Math.max(0, saved.workedDays);
   }
+  if (saved.payroll && typeof saved.payroll === 'object') {
+    state.payroll = { ...state.payroll, ...saved.payroll };
+    if (!PAYROLL_TAX.periodFactors[state.payroll.period]) {
+      state.payroll.period = DEFAULTS.payrollPeriod;
+    }
+    state.payroll.hasLoonheffingskorting = Boolean(state.payroll.hasLoonheffingskorting);
+  }
   state.rates = { ...state.rates, ...(saved.rates || {}) };
   state.hours = { ...state.hours, ...(saved.hours || {}) };
-  state.reimbursements = Array.isArray(saved.reimbursements) ? saved.reimbursements : state.reimbursements;
-  state.deductions = normalizeDeductions(saved.deductions) || state.deductions;
+  state.reimbursements = Array.isArray(saved.reimbursements)
+    ? saved.reimbursements.map((item) => normalizeReimbursement(item))
+    : state.reimbursements;
+  state.deductions = Array.isArray(saved.deductions) ? saved.deductions : state.deductions;
   state.tax = { ...state.tax, ...(saved.tax || {}) };
   state.tax.rate = clamp(state.tax.rate, LIMITS.taxRateMin, LIMITS.taxRateMax);
   if (state.workedDays > 0) {
@@ -109,6 +122,43 @@ function formatCurrency(amount) {
   return currencyFormatter.format(amount);
 }
 
+function calculatePayrollTax({ taxableWage, period, hasLoonheffingskorting }) {
+  const annualFactor = PAYROLL_TAX.periodFactors[period] ?? PAYROLL_TAX.periodFactors.month;
+  const annualTaxableWage = taxableWage * annualFactor;
+
+  let annualTax = 0;
+  let previousLimit = 0;
+  PAYROLL_TAX.brackets.forEach((bracket) => {
+    const limit = bracket.upTo ?? Infinity;
+    if (annualTaxableWage > previousLimit) {
+      const taxableSlice = Math.min(annualTaxableWage, limit) - previousLimit;
+      annualTax += taxableSlice * bracket.rate;
+    }
+    previousLimit = limit;
+  });
+
+  let annualCredits = 0;
+  if (hasLoonheffingskorting) {
+    const { general, labor } = PAYROLL_TAX.credits;
+    const generalReduction = Math.max(0, (annualTaxableWage - general.phaseOutStart) * general.phaseOutRate);
+    const generalCredit = Math.max(0, general.max - generalReduction);
+
+    let laborCredit = 0;
+    if (annualTaxableWage <= labor.phaseInEnd) {
+      laborCredit = annualTaxableWage * labor.phaseInRate;
+    } else if (annualTaxableWage <= labor.plateauEnd) {
+      laborCredit = labor.max;
+    } else {
+      laborCredit = Math.max(0, labor.max - (annualTaxableWage - labor.plateauEnd) * labor.phaseOutRate);
+    }
+
+    annualCredits = Math.min(annualTax, generalCredit + laborCredit);
+  }
+
+  const annualNetTax = Math.max(0, annualTax - annualCredits);
+  return annualNetTax / annualFactor;
+}
+
 function calculate(currentState) {
   const basePay = currentState.hours.normal * currentState.rates.base;
   const ot150Pay = currentState.hours.ot150 * currentState.rates.base * currentState.rates.mult150;
@@ -120,31 +170,27 @@ function calculate(currentState) {
   const taxableReimbursements = currentState.reimbursements
     .filter((item) => item.taxable)
     .reduce((sum, item) => sum + item.amount, 0);
+  const svReimbursements = currentState.reimbursements
+    .filter((item) => item.svWage)
+    .reduce((sum, item) => sum + item.amount, 0);
+  const zvwReimbursements = currentState.reimbursements
+    .filter((item) => item.zvwWage)
+    .reduce((sum, item) => sum + item.amount, 0);
   const nonTaxableReimbursements = reimbursementsTotal - taxableReimbursements;
 
+  const baseWage = basePay + ot150Pay + ot200Pay + standbyPay;
   const grossTotal = basePay + ot150Pay + ot200Pay + standbyPay + reimbursementsTotal;
   const taxableWage = basePay + ot150Pay + ot200Pay + standbyPay + taxableReimbursements;
-  const svWage = wageBase;
-  const zvwWage = wageBase;
-  const deductionBases = {
-    taxableWage,
-    svWage,
-    zvwWage
+  const payrollSettings = currentState.payroll || {
+    period: DEFAULTS.payrollPeriod,
+    hasLoonheffingskorting: DEFAULTS.hasLoonheffingskorting
   };
-  const estimatedTax = taxableWage * currentState.tax.rate;
-  const deductionDetails = currentState.deductions.map((item) => {
-    const type = item.type === 'percent' ? 'percent' : 'fixed';
-    const basis = item.basis || 'taxableWage';
-    const basisValue = deductionBases[basis] ?? taxableWage;
-    const calculated = type === 'percent' ? basisValue * (item.amount / 100) : item.amount;
-    return {
-      ...item,
-      type,
-      basis,
-      calculated
-    };
+  const estimatedTax = calculatePayrollTax({
+    taxableWage,
+    period: payrollSettings.period,
+    hasLoonheffingskorting: payrollSettings.hasLoonheffingskorting
   });
-  const otherDeductions = deductionDetails.reduce((sum, item) => sum + item.calculated, 0);
+  const otherDeductions = currentState.deductions.reduce((sum, item) => sum + item.amount, 0);
   const net = grossTotal - estimatedTax - otherDeductions;
 
   return {
@@ -156,13 +202,15 @@ function calculate(currentState) {
       { label: 'Vergoedingen', amount: reimbursementsTotal }
     ],
     deductions: [
-      { label: `Geschatte belasting (${Math.round(currentState.tax.rate * 1000) / 10}%)`, amount: estimatedTax },
-      ...deductionDetails.map((d) => ({ label: d.label, amount: d.calculated }))
+      { label: 'Geschatte loonheffing', amount: estimatedTax },
+      ...currentState.deductions.map((d) => ({ label: d.label, amount: d.amount }))
     ],
     deductionDetails,
     totals: {
       gross: grossTotal,
       taxable: taxableWage,
+      svWage,
+      zvwWage,
       est_tax: estimatedTax,
       net,
       non_taxable: nonTaxableReimbursements
@@ -195,6 +243,8 @@ function renderDeductions(lines) {
 function renderTotals(totals) {
   document.getElementById('totalsGross').textContent = formatCurrency(totals.gross);
   document.getElementById('totalsTaxable').textContent = formatCurrency(totals.taxable);
+  document.getElementById('totalsSvWage').textContent = formatCurrency(totals.svWage);
+  document.getElementById('totalsZvwWage').textContent = formatCurrency(totals.zvwWage);
   document.getElementById('totalsTax').textContent = formatCurrency(totals.est_tax);
   document.getElementById('totalsNet').textContent = formatCurrency(totals.net);
   document.getElementById('totalsNonTaxable').textContent = formatCurrency(totals.non_taxable);
@@ -210,6 +260,8 @@ function renderReimbursementsTable(items) {
       <td><input type="text" value="${item.label}" data-field="label" aria-label="Label" /></td>
       <td><input type="number" step="0.01" value="${item.amount}" data-field="amount" aria-label="Bedrag" /></td>
       <td style="text-align:center"><input type="checkbox" data-field="taxable" ${item.taxable ? 'checked' : ''} aria-label="Belastbaar" /></td>
+      <td style="text-align:center"><input type="checkbox" data-field="svWage" ${item.svWage ? 'checked' : ''} aria-label="SV-loon" /></td>
+      <td style="text-align:center"><input type="checkbox" data-field="zvwWage" ${item.zvwWage ? 'checked' : ''} aria-label="Zvw-loon" /></td>
       <td class="actions"><button type="button" class="ghost" data-action="remove">✕</button></td>
     `;
     body.appendChild(row);
@@ -271,7 +323,9 @@ function readTablesIntoState() {
     const label = row.querySelector('[data-field="label"]').value || 'Vergoeding';
     const amount = parseNumber(row.querySelector('[data-field="amount"]').value);
     const taxable = row.querySelector('[data-field="taxable"]').checked;
-    return { id, label, amount, taxable };
+    const svWage = row.querySelector('[data-field="svWage"]').checked;
+    const zvwWage = row.querySelector('[data-field="zvwWage"]').checked;
+    return { id, label, amount, taxable, svWage, zvwWage };
   });
 
   const deductRows = document.querySelectorAll('#deductionsTableBody tr');
@@ -324,6 +378,9 @@ function readFormIntoState() {
   }
 
   readTablesIntoState();
+  const payrollPeriod = document.querySelector('input[name="payrollPeriod"]:checked')?.value || DEFAULTS.payrollPeriod;
+  state.payroll.period = payrollPeriod === 'fourWeeks' ? 'fourWeeks' : 'month';
+  state.payroll.hasLoonheffingskorting = document.getElementById('loonheffingskortingToggle').checked;
   toggleHoursWarning();
 }
 
@@ -341,10 +398,19 @@ function render(result) {
   renderReimbursementsTable(state.reimbursements);
   renderDeductionsTable(state.deductions, result.deductionDetails);
   renderTaxUI(state.tax);
+  document.querySelector(`input[name="payrollPeriod"][value="${state.payroll.period}"]`).checked = true;
+  document.getElementById('loonheffingskortingToggle').checked = state.payroll.hasLoonheffingskorting;
 }
 
 function addReimbursement() {
-  state.reimbursements.push({ id: getId(), label: 'Representatie', amount: 0, taxable: false });
+  state.reimbursements.push({
+    id: getId(),
+    label: 'Representatie',
+    amount: 0,
+    taxable: false,
+    svWage: false,
+    zvwWage: false
+  });
   renderReimbursementsTable(state.reimbursements);
 }
 
@@ -373,16 +439,18 @@ function recalc() {
 }
 
 function exportCSV(result) {
+  const periodLabel = state.payroll.period === 'fourWeeks' ? '4-weken' : 'Maand';
   const rows = [
     ['label', 'type', 'amount'],
     ...result.earnings.map((line) => [line.label, 'earning', line.amount.toFixed(2)]),
     ...result.deductions.map((line) => [line.label, 'deduction', line.amount.toFixed(2)]),
     ['Totaal bruto', 'total', result.totals.gross.toFixed(2)],
     ['Belastbaar loon', 'total', result.totals.taxable.toFixed(2)],
-    ['Geschatte belasting', 'total', result.totals.est_tax.toFixed(2)],
+    ['Geschatte loonheffing', 'total', result.totals.est_tax.toFixed(2)],
     ['Netto indicatie', 'total', result.totals.net.toFixed(2)],
     ['Onbelaste vergoedingen', 'info', result.totals.non_taxable.toFixed(2)],
-    ['Belastingtarief', 'info', (state.tax.rate * 100).toFixed(1) + '%'],
+    ['Periode loonheffing', 'info', periodLabel],
+    ['Loonheffingskorting toegepast', 'info', state.payroll.hasLoonheffingskorting ? 'Ja' : 'Nee'],
     ['Timestamp', 'meta', new Date().toISOString()]
   ];
 
@@ -417,6 +485,10 @@ function resetAll() {
   state.workedDays = 0;
   state.reimbursements = [];
   state.deductions = [];
+  state.payroll = {
+    period: DEFAULTS.payrollPeriod,
+    hasLoonheffingskorting: DEFAULTS.hasLoonheffingskorting
+  };
   state.tax = {
     mode: 'preset',
     presetId: DEFAULTS.taxPresetId,
@@ -441,6 +513,8 @@ function hydrateForm() {
   renderReimbursementsTable(state.reimbursements);
   renderDeductionsTable(state.deductions);
   renderTaxUI(state.tax);
+  document.querySelector(`input[name="payrollPeriod"][value="${state.payroll.period}"]`).checked = true;
+  document.getElementById('loonheffingskortingToggle').checked = state.payroll.hasLoonheffingskorting;
 }
 
 function populateTaxPresets() {
@@ -462,6 +536,10 @@ function attachEventListeners() {
   document.getElementById('taxMode').addEventListener('change', recalc);
   document.getElementById('taxPreset').addEventListener('change', recalc);
   document.getElementById('taxCustom').addEventListener('input', recalc);
+  document.querySelectorAll('input[name="payrollPeriod"]').forEach((el) => {
+    el.addEventListener('change', recalc);
+  });
+  document.getElementById('loonheffingskortingToggle').addEventListener('change', recalc);
 
   document.getElementById('addReimbursement').addEventListener('click', () => {
     addReimbursement();
@@ -500,16 +578,20 @@ function runSelfTests() {
     rates: { base: 20, standby: 2, mult150: 1.5, mult200: 2 },
     hours: { normal: 160, ot150: 10, ot200: 5, standby: 8 },
     reimbursements: [
-      { id: 'a', label: 'Reiskosten', amount: 50, taxable: false },
-      { id: 'b', label: 'Bonus', amount: 100, taxable: true }
+      { id: 'a', label: 'Reiskosten', amount: 50, taxable: false, svWage: false, zvwWage: false },
+      { id: 'b', label: 'Bonus', amount: 100, taxable: true, svWage: true, zvwWage: true }
     ],
     deductions: [{ id: 'c', label: 'Pensioen', amount: 80 }],
-    tax: { rate: 0.35 }
+    payroll: { period: 'month', hasLoonheffingskorting: true }
   };
   const result = calculate(exampleState);
   const expectedGross = (160 * 20) + (10 * 20 * 1.5) + (5 * 20 * 2) + (8 * 2) + 150;
   const expectedTaxable = (160 * 20) + (10 * 20 * 1.5) + (5 * 20 * 2) + 100 + (8 * 2);
-  const expectedTax = expectedTaxable * 0.35;
+  const expectedTax = calculatePayrollTax({
+    taxableWage: expectedTaxable,
+    period: exampleState.payroll.period,
+    hasLoonheffingskorting: exampleState.payroll.hasLoonheffingskorting
+  });
   const expectedNet = expectedGross - expectedTax - 80;
   const allGood = Math.abs(result.totals.gross - expectedGross) < 0.001 &&
     Math.abs(result.totals.taxable - expectedTaxable) < 0.001 &&
