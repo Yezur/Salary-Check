@@ -17,7 +17,7 @@ Een eenvoudige, volledig client-side webapp die per maand een bruto salaris en e
 Open `index.html` in je browser. Alle benodigde bestanden staan lokaal (geen build-stap nodig).
 
 ## Gebruiksinstructies
-1. Vul de tarieven en uren in.
+1. Vul de tarieven en uren in (optioneel kun je een uurloon invullen; dit bepaalt dan het basisloon en het overwerk).
 2. Voeg eventueel vergoedingen en inhoudingen toe via de tabellen.
 3. Kies een netto preset of vul een custom percentage in.
 4. Bekijk de resultaten in de kaarten “Betalingen”, “Inhoudingen” en “Totalen”.
