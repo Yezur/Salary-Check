@@ -98,7 +98,7 @@ function mergeState(saved) {
   state.reimbursements = Array.isArray(saved.reimbursements)
     ? saved.reimbursements.map((item) => normalizeReimbursement(item))
     : state.reimbursements;
-  state.deductions = Array.isArray(saved.deductions) ? saved.deductions : state.deductions;
+  state.deductions = Array.isArray(saved.deductions) ? normalizeDeductions(saved.deductions) : state.deductions;
   state.tax = { ...state.tax, ...(saved.tax || {}) };
   state.tax.rate = clamp(state.tax.rate, LIMITS.taxRateMin, LIMITS.taxRateMax);
   if (state.workedDays > 0) {
@@ -181,6 +181,8 @@ function calculate(currentState) {
   const baseWage = basePay + ot150Pay + ot200Pay + standbyPay;
   const grossTotal = basePay + ot150Pay + ot200Pay + standbyPay + reimbursementsTotal;
   const taxableWage = basePay + ot150Pay + ot200Pay + standbyPay + taxableReimbursements;
+  const svWage = baseWage + svReimbursements;
+  const zvwWage = baseWage + zvwReimbursements;
   const payrollSettings = currentState.payroll || {
     period: DEFAULTS.payrollPeriod,
     hasLoonheffingskorting: DEFAULTS.hasLoonheffingskorting
@@ -190,7 +192,15 @@ function calculate(currentState) {
     period: payrollSettings.period,
     hasLoonheffingskorting: payrollSettings.hasLoonheffingskorting
   });
-  const otherDeductions = currentState.deductions.reduce((sum, item) => sum + item.amount, 0);
+  const deductionDetails = currentState.deductions.map((item) => {
+    const type = item.type === 'percent' ? 'percent' : 'fixed';
+    const basis = item.basis || 'taxableWage';
+    const amount = parseNumber(item.amount);
+    const basisValue = basis === 'svWage' ? svWage : basis === 'zvwWage' ? zvwWage : taxableWage;
+    const calculated = type === 'percent' ? basisValue * (amount / 100) : amount;
+    return { ...item, type, basis, calculated };
+  });
+  const otherDeductions = deductionDetails.reduce((sum, item) => sum + item.calculated, 0);
   const net = grossTotal - estimatedTax - otherDeductions;
 
   return {
@@ -203,7 +213,7 @@ function calculate(currentState) {
     ],
     deductions: [
       { label: 'Geschatte loonheffing', amount: estimatedTax },
-      ...currentState.deductions.map((d) => ({ label: d.label, amount: d.amount }))
+      ...deductionDetails.map((d) => ({ label: d.label, amount: d.calculated }))
     ],
     deductionDetails,
     totals: {
