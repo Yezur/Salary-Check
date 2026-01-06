@@ -60,26 +60,6 @@ main { display: flex; flex-direction: column; gap: 1rem; }
   margin-bottom: 0.75rem;
 }
 
-.pill-group {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 0.75rem;
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.75rem;
-}
-.pill-group legend {
-  font-weight: 700;
-  padding: 0 0.5rem;
-}
-.pill-group label {
-  flex-direction: row;
-  gap: 0.5rem;
-  align-items: center;
-  font-weight: 600;
-}
-
 .grid { display: grid; gap: 0.75rem; }
 .two-cols { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 

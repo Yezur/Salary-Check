@@ -23,10 +23,6 @@ const state = {
     mult150: DEFAULTS.mult150,
     mult200: DEFAULTS.mult200
   },
-  compensation: {
-    mode: 'hourly',
-    monthlySalary: 0
-  },
   hours: {
     normal: 0,
     ot150: 0,
@@ -96,15 +92,6 @@ function mergeState(saved) {
       state.payroll.period = DEFAULTS.payrollPeriod;
     }
     state.payroll.hasLoonheffingskorting = Boolean(state.payroll.hasLoonheffingskorting);
-  }
-  if (saved.compensation && typeof saved.compensation === 'object') {
-    const mode = saved.compensation.mode === 'monthly' ? 'monthly' : 'hourly';
-    state.compensation = {
-      ...state.compensation,
-      ...saved.compensation,
-      mode,
-      monthlySalary: Math.max(0, parseNumber(saved.compensation.monthlySalary))
-    };
   }
   state.rates = { ...state.rates, ...(saved.rates || {}) };
   state.hours = { ...state.hours, ...(saved.hours || {}) };
@@ -186,14 +173,9 @@ function calculateEstimatedTax(currentState, taxableWage, payrollSettings) {
 }
 
 function calculate(currentState) {
-  const isMonthlySalary = currentState.compensation?.mode === 'monthly';
-  const normalHours = currentState.hours.normal;
-  const derivedBaseRate = isMonthlySalary && normalHours > 0
-    ? currentState.compensation.monthlySalary / normalHours
-    : currentState.rates.base;
-  const basePay = isMonthlySalary ? currentState.compensation.monthlySalary : normalHours * currentState.rates.base;
-  const ot150Pay = currentState.hours.ot150 * derivedBaseRate * currentState.rates.mult150;
-  const ot200Pay = currentState.hours.ot200 * derivedBaseRate * currentState.rates.mult200;
+  const basePay = currentState.hours.normal * currentState.rates.base;
+  const ot150Pay = currentState.hours.ot150 * currentState.rates.base * currentState.rates.mult150;
+  const ot200Pay = currentState.hours.ot200 * currentState.rates.base * currentState.rates.mult200;
   const standbyPay = currentState.hours.standby * currentState.rates.standby;
   const reimbursementsTotal = currentState.reimbursements.reduce((sum, item) => sum + item.amount, 0);
   const wageBase = basePay + ot150Pay + ot200Pay + standbyPay;
@@ -385,9 +367,6 @@ function readTablesIntoState() {
 }
 
 function readFormIntoState() {
-  const compensationMode = document.querySelector('input[name="compensationMode"]:checked')?.value;
-  state.compensation.mode = compensationMode === 'monthly' ? 'monthly' : 'hourly';
-  state.compensation.monthlySalary = Math.max(0, parseNumber(document.getElementById('monthlySalary').value));
   state.rates.base = Math.max(0, parseNumber(document.getElementById('baseRate').value));
   state.rates.standby = Math.max(0, parseNumber(document.getElementById('standbyRate').value));
   state.rates.mult150 = clamp(parseNumber(document.getElementById('mult150').value) || DEFAULTS.mult150, 1, 5);
@@ -446,7 +425,6 @@ function render(result) {
   renderReimbursementsTable(state.reimbursements);
   renderDeductionsTable(state.deductions, result.deductionDetails);
   renderTaxUI(state.tax);
-  updateCompensationUI();
   document.querySelector(`input[name="payrollPeriod"][value="${state.payroll.period}"]`).checked = true;
   document.getElementById('loonheffingskortingToggle').checked = state.payroll.hasLoonheffingskorting;
 }
@@ -532,10 +510,6 @@ function resetAll() {
     mult150: DEFAULTS.mult150,
     mult200: DEFAULTS.mult200
   };
-  state.compensation = {
-    mode: 'hourly',
-    monthlySalary: 0
-  };
   state.hours = { normal: 0, ot150: 0, ot200: 0, standby: 0 };
   state.workedDays = 0;
   state.reimbursements = [];
@@ -558,8 +532,6 @@ function hydrateForm() {
   document.getElementById('standbyRate').value = state.rates.standby;
   document.getElementById('mult150').value = state.rates.mult150;
   document.getElementById('mult200').value = state.rates.mult200;
-  document.getElementById('monthlySalary').value = state.compensation.monthlySalary;
-  document.querySelector(`input[name="compensationMode"][value="${state.compensation.mode}"]`).checked = true;
   document.getElementById('workedDays').value = state.workedDays;
   const normalHours = state.workedDays > 0 ? state.workedDays * HOURS_PER_DAY : state.hours.normal;
   state.hours.normal = normalHours;
@@ -570,17 +542,8 @@ function hydrateForm() {
   renderReimbursementsTable(state.reimbursements);
   renderDeductionsTable(state.deductions);
   renderTaxUI(state.tax);
-  updateCompensationUI();
   document.querySelector(`input[name="payrollPeriod"][value="${state.payroll.period}"]`).checked = true;
   document.getElementById('loonheffingskortingToggle').checked = state.payroll.hasLoonheffingskorting;
-}
-
-function updateCompensationUI() {
-  const isMonthly = state.compensation.mode === 'monthly';
-  const baseRateInput = document.getElementById('baseRate');
-  const monthlySalaryInput = document.getElementById('monthlySalary');
-  baseRateInput.disabled = isMonthly;
-  monthlySalaryInput.disabled = !isMonthly;
 }
 
 function populateTaxPresets() {
@@ -594,11 +557,8 @@ function populateTaxPresets() {
 }
 
 function attachEventListeners() {
-  document.querySelectorAll('#baseRate, #monthlySalary, #standbyRate, #mult150, #mult200, #workedDays, #hNormal, #h150, #h200, #hStandby').forEach((el) => {
+  document.querySelectorAll('#baseRate, #standbyRate, #mult150, #mult200, #workedDays, #hNormal, #h150, #h200, #hStandby').forEach((el) => {
     el.addEventListener('input', recalc);
-    el.addEventListener('change', recalc);
-  });
-  document.querySelectorAll('input[name="compensationMode"]').forEach((el) => {
     el.addEventListener('change', recalc);
   });
 
