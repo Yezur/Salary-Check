@@ -159,6 +159,19 @@ function calculatePayrollTax({ taxableWage, period, hasLoonheffingskorting }) {
   return annualNetTax / annualFactor;
 }
 
+function calculateEstimatedTax(currentState, taxableWage, payrollSettings) {
+  const taxMode = currentState.tax?.mode;
+  if (taxMode === 'preset' || taxMode === 'custom') {
+    const rate = clamp(parseNumber(currentState.tax?.rate), LIMITS.taxRateMin, LIMITS.taxRateMax);
+    return taxableWage * rate;
+  }
+  return calculatePayrollTax({
+    taxableWage,
+    period: payrollSettings.period,
+    hasLoonheffingskorting: payrollSettings.hasLoonheffingskorting
+  });
+}
+
 function calculate(currentState) {
   const basePay = currentState.hours.normal * currentState.rates.base;
   const ot150Pay = currentState.hours.ot150 * currentState.rates.base * currentState.rates.mult150;
@@ -187,11 +200,7 @@ function calculate(currentState) {
     period: DEFAULTS.payrollPeriod,
     hasLoonheffingskorting: DEFAULTS.hasLoonheffingskorting
   };
-  const estimatedTax = calculatePayrollTax({
-    taxableWage,
-    period: payrollSettings.period,
-    hasLoonheffingskorting: payrollSettings.hasLoonheffingskorting
-  });
+  const estimatedTax = calculateEstimatedTax(currentState, taxableWage, payrollSettings);
   const deductionDetails = currentState.deductions.map((item) => {
     const type = item.type === 'percent' ? 'percent' : 'fixed';
     const basis = item.basis || 'taxableWage';
