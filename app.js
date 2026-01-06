@@ -3,6 +3,19 @@ import { DEFAULTS, TAX_PRESETS, LIMITS, PAYROLL_TAX } from './config.js';
 const STORAGE_KEY = 'paycalc:v1';
 const SAVE_DEBOUNCE_MS = 300;
 const HOURS_PER_DAY = 8;
+const COMPUTED_EARNINGS_TYPES = new Set(['salary', 'allowances']);
+const EARNINGS_TYPE_LABELS = {
+  salary: 'Salaris',
+  holiday: 'Vakantiegeld',
+  allowances: 'Toeslagen',
+  twk: 'TWK'
+};
+const DEFAULT_EARNINGS_ITEMS = [
+  { type: 'salary', amount: 0, taxable: true, sv: true, zvw: true },
+  { type: 'holiday', amount: 0, taxable: true, sv: true, zvw: true },
+  { type: 'allowances', amount: 0, taxable: true, sv: true, zvw: true },
+  { type: 'twk', amount: 0, taxable: true, sv: true, zvw: true }
+];
 
 const currencyFormatter = new Intl.NumberFormat('nl-NL', {
   style: 'currency',
@@ -29,6 +42,7 @@ const state = {
     ot200: 0,
     standby: 0
   },
+  earningsItems: DEFAULT_EARNINGS_ITEMS.map((item) => ({ ...item })),
   reimbursements: [],
   deductions: [],
   tax: {
@@ -46,6 +60,21 @@ function parseNumber(value) {
   const normalized = String(value).replace(',', '.');
   const parsed = parseFloat(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeEarningsItems(items) {
+  const byType = new Map(Array.isArray(items) ? items.map((item) => [item.type, item]) : []);
+  return DEFAULT_EARNINGS_ITEMS.map((item) => {
+    const saved = byType.get(item.type) || {};
+    return {
+      ...item,
+      ...saved,
+      amount: parseNumber(saved.amount ?? item.amount),
+      taxable: saved.taxable ?? item.taxable,
+      sv: saved.sv ?? item.sv,
+      zvw: saved.zvw ?? item.zvw
+    };
+  });
 }
 
 function clamp(value, min, max) {
@@ -160,10 +189,8 @@ function calculatePayrollTax({ taxableWage, period, hasLoonheffingskorting }) {
 }
 
 function calculate(currentState) {
-  const basePay = currentState.hours.normal * currentState.rates.base;
-  const ot150Pay = currentState.hours.ot150 * currentState.rates.base * currentState.rates.mult150;
-  const ot200Pay = currentState.hours.ot200 * currentState.rates.base * currentState.rates.mult200;
-  const standbyPay = currentState.hours.standby * currentState.rates.standby;
+  const earningsItems = Array.isArray(currentState.earningsItems) ? currentState.earningsItems : [];
+  const earningsTotal = earningsItems.reduce((sum, item) => sum + item.amount, 0);
   const reimbursementsTotal = currentState.reimbursements.reduce((sum, item) => sum + item.amount, 0);
   const wageBase = basePay + ot150Pay + ot200Pay + standbyPay;
 
@@ -195,10 +222,10 @@ function calculate(currentState) {
 
   return {
     earnings: [
-      { label: 'Salaris', amount: basePay },
-      { label: 'Overwerk 150%', amount: ot150Pay },
-      { label: 'Overwerk 200%', amount: ot200Pay },
-      { label: 'Standby', amount: standbyPay },
+      ...earningsItems.map((item) => ({
+        label: EARNINGS_TYPE_LABELS[item.type] || item.type,
+        amount: item.amount
+      })),
       { label: 'Vergoedingen', amount: reimbursementsTotal }
     ],
     deductions: [
@@ -317,6 +344,23 @@ function renderTaxUI(tax) {
 }
 
 function readTablesIntoState() {
+  const earningsRows = document.querySelectorAll('#earningsItemsTableBody tr');
+  state.earningsItems = Array.from(earningsRows).map((row) => {
+    const type = row.dataset.type;
+    const existing = state.earningsItems.find((item) => item.type === type) || DEFAULT_EARNINGS_ITEMS.find((item) => item.type === type);
+    const amount = parseNumber(row.querySelector('[data-field="amount"]').value);
+    const taxable = row.querySelector('[data-field="taxable"]').checked;
+    const sv = row.querySelector('[data-field="sv"]').checked;
+    const zvw = row.querySelector('[data-field="zvw"]').checked;
+    return {
+      type,
+      amount: COMPUTED_EARNINGS_TYPES.has(type) && existing ? existing.amount : amount,
+      taxable,
+      sv,
+      zvw
+    };
+  });
+
   const reimbRows = document.querySelectorAll('#reimbursementsTableBody tr');
   state.reimbursements = Array.from(reimbRows).map((row) => {
     const id = row.dataset.id || getId();
@@ -377,6 +421,21 @@ function readFormIntoState() {
     state.tax.presetId = null;
   }
 
+  const basePay = state.hours.normal * state.rates.base;
+  const ot150Pay = state.hours.ot150 * state.rates.base * state.rates.mult150;
+  const ot200Pay = state.hours.ot200 * state.rates.base * state.rates.mult200;
+  const standbyPay = state.hours.standby * state.rates.standby;
+  const allowancesTotal = ot150Pay + ot200Pay + standbyPay;
+
+  const earningsByType = new Map(state.earningsItems.map((item) => [item.type, item]));
+  if (earningsByType.has('salary')) {
+    earningsByType.get('salary').amount = basePay;
+  }
+  if (earningsByType.has('allowances')) {
+    earningsByType.get('allowances').amount = allowancesTotal;
+  }
+  state.earningsItems = normalizeEarningsItems(Array.from(earningsByType.values()));
+
   readTablesIntoState();
   const payrollPeriod = document.querySelector('input[name="payrollPeriod"]:checked')?.value || DEFAULTS.payrollPeriod;
   state.payroll.period = payrollPeriod === 'fourWeeks' ? 'fourWeeks' : 'month';
@@ -395,6 +454,7 @@ function render(result) {
   renderEarnings(result.earnings);
   renderDeductions(result.deductions);
   renderTotals(result.totals);
+  renderEarningsItemsTable(state.earningsItems);
   renderReimbursementsTable(state.reimbursements);
   renderDeductionsTable(state.deductions, result.deductionDetails);
   renderTaxUI(state.tax);
@@ -483,6 +543,7 @@ function resetAll() {
   };
   state.hours = { normal: 0, ot150: 0, ot200: 0, standby: 0 };
   state.workedDays = 0;
+  state.earningsItems = DEFAULT_EARNINGS_ITEMS.map((item) => ({ ...item }));
   state.reimbursements = [];
   state.deductions = [];
   state.payroll = {
@@ -510,6 +571,7 @@ function hydrateForm() {
   document.getElementById('h150').value = state.hours.ot150;
   document.getElementById('h200').value = state.hours.ot200;
   document.getElementById('hStandby').value = state.hours.standby;
+  renderEarningsItemsTable(state.earningsItems);
   renderReimbursementsTable(state.reimbursements);
   renderDeductionsTable(state.deductions);
   renderTaxUI(state.tax);
@@ -532,6 +594,8 @@ function attachEventListeners() {
     el.addEventListener('input', recalc);
     el.addEventListener('change', recalc);
   });
+
+  document.getElementById('earningsItemsTableBody').addEventListener('input', recalc);
 
   document.getElementById('taxMode').addEventListener('change', recalc);
   document.getElementById('taxPreset').addEventListener('change', recalc);
@@ -575,8 +639,12 @@ function attachEventListeners() {
 
 function runSelfTests() {
   const exampleState = {
-    rates: { base: 20, standby: 2, mult150: 1.5, mult200: 2 },
-    hours: { normal: 160, ot150: 10, ot200: 5, standby: 8 },
+    earningsItems: [
+      { type: 'salary', amount: 3200, taxable: true, sv: true, zvw: true },
+      { type: 'holiday', amount: 300, taxable: true, sv: true, zvw: true },
+      { type: 'allowances', amount: 250, taxable: true, sv: true, zvw: true },
+      { type: 'twk', amount: 120, taxable: true, sv: true, zvw: true }
+    ],
     reimbursements: [
       { id: 'a', label: 'Reiskosten', amount: 50, taxable: false, svWage: false, zvwWage: false },
       { id: 'b', label: 'Bonus', amount: 100, taxable: true, svWage: true, zvwWage: true }
