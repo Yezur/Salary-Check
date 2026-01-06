@@ -67,7 +67,7 @@ function normalizeDeductions(items) {
     label: item.label || 'Inhouding',
     amount: parseNumber(item.amount),
     type: item.type === 'percent' ? 'percent' : 'fixed',
-    basis: item.basis || 'taxableWage'
+    basis: 'taxableWage'
   }));
 }
 
@@ -151,12 +151,6 @@ function calculate(currentState) {
   const taxableReimbursements = currentState.reimbursements
     .filter((item) => item.taxable)
     .reduce((sum, item) => sum + item.amount, 0);
-  const svReimbursements = currentState.reimbursements
-    .filter((item) => item.svWage)
-    .reduce((sum, item) => sum + item.amount, 0);
-  const zvwReimbursements = currentState.reimbursements
-    .filter((item) => item.zvwWage)
-    .reduce((sum, item) => sum + item.amount, 0);
   const nonTaxableReimbursements = reimbursementsTotal - taxableReimbursements;
 
   const overtimePay = ot150Pay + ot200Pay;
@@ -164,16 +158,14 @@ function calculate(currentState) {
   const grossTotal = basePay + ot150Pay + ot200Pay + standbyPay + reimbursementsTotal;
   const baseTaxableWage = basePay + taxableReimbursements;
   const taxableWage = baseTaxableWage;
-  const svWage = baseWage + svReimbursements;
-  const zvwWage = baseWage + zvwReimbursements;
   const baseTax = calculateEstimatedTax(currentState, baseTaxableWage);
   const overtimeTax = (ot150Pay + ot200Pay) * 0.5033;
   const estimatedTax = baseTax + overtimeTax;
   const deductionDetails = currentState.deductions.map((item) => {
     const type = item.type === 'percent' ? 'percent' : 'fixed';
-    const basis = item.basis || 'taxableWage';
+    const basis = 'taxableWage';
     const amount = parseNumber(item.amount);
-    const basisValue = basis === 'svWage' ? svWage : basis === 'zvwWage' ? zvwWage : taxableWage;
+    const basisValue = taxableWage;
     const calculated = type === 'percent' ? basisValue * (amount / 100) : amount;
     return { ...item, type, basis, calculated };
   });
@@ -203,8 +195,6 @@ function calculate(currentState) {
       deductions: totalDeductions,
       gross: grossTotal,
       taxable: taxableWage,
-      svWage,
-      zvwWage,
       base_tax: baseTax,
       overtime_tax: overtimeTax,
       est_tax: estimatedTax,
@@ -241,8 +231,6 @@ function renderTotals(totals) {
   document.getElementById('totalsDeductions').textContent = formatCurrency(totals.deductions);
   document.getElementById('totalsGross').textContent = formatCurrency(totals.gross);
   document.getElementById('totalsTaxable').textContent = formatCurrency(totals.taxable);
-  document.getElementById('totalsSvWage').textContent = formatCurrency(totals.svWage);
-  document.getElementById('totalsZvwWage').textContent = formatCurrency(totals.zvwWage);
   document.getElementById('totalsTax').textContent = formatCurrency(totals.est_tax);
   document.getElementById('totalsNet').textContent = formatCurrency(totals.net);
   document.getElementById('totalsNonTaxable').textContent = formatCurrency(totals.non_taxable);
@@ -258,8 +246,6 @@ function renderReimbursementsTable(items) {
       <td><input type="text" value="${item.label}" data-field="label" aria-label="Label" /></td>
       <td><input type="number" step="0.01" value="${item.amount}" data-field="amount" aria-label="Bedrag" /></td>
       <td style="text-align:center"><input type="checkbox" data-field="taxable" ${item.taxable ? 'checked' : ''} aria-label="Belastbaar" /></td>
-      <td style="text-align:center"><input type="checkbox" data-field="svWage" ${item.svWage ? 'checked' : ''} aria-label="SV-loon" /></td>
-      <td style="text-align:center"><input type="checkbox" data-field="zvwWage" ${item.zvwWage ? 'checked' : ''} aria-label="Zvw-loon" /></td>
       <td class="actions"><button type="button" class="ghost" data-action="remove">✕</button></td>
     `;
     body.appendChild(row);
@@ -274,7 +260,6 @@ function renderDeductionsTable(items, deductionDetails = []) {
     const row = document.createElement('tr');
     row.dataset.id = item.id;
     const type = item.type === 'percent' ? 'percent' : 'fixed';
-    const basis = item.basis || 'taxableWage';
     const calculated = calculatedMap.get(item.id);
     row.innerHTML = `
       <td><input type="text" value="${item.label}" data-field="label" aria-label="Label" /></td>
@@ -285,13 +270,6 @@ function renderDeductionsTable(items, deductionDetails = []) {
         </select>
       </td>
       <td><input type="number" step="0.01" value="${item.amount}" data-field="amount" aria-label="Bedrag of percentage" /></td>
-      <td>
-        <select data-field="basis" aria-label="Basis" ${type === 'percent' ? '' : 'disabled'}>
-          <option value="taxableWage" ${basis === 'taxableWage' ? 'selected' : ''}>taxableWage</option>
-          <option value="svWage" ${basis === 'svWage' ? 'selected' : ''}>svWage</option>
-          <option value="zvwWage" ${basis === 'zvwWage' ? 'selected' : ''}>zvwWage</option>
-        </select>
-      </td>
       <td>${calculated === undefined ? '-' : formatCurrency(calculated)}</td>
       <td class="actions"><button type="button" class="ghost" data-action="remove">✕</button></td>
     `;
@@ -321,9 +299,7 @@ function readTablesIntoState() {
     const label = row.querySelector('[data-field="label"]').value || 'Vergoeding';
     const amount = parseNumber(row.querySelector('[data-field="amount"]').value);
     const taxable = row.querySelector('[data-field="taxable"]').checked;
-    const svWage = row.querySelector('[data-field="svWage"]').checked;
-    const zvwWage = row.querySelector('[data-field="zvwWage"]').checked;
-    return { id, label, amount, taxable, svWage, zvwWage };
+    return { id, label, amount, taxable };
   });
 
   const deductRows = document.querySelectorAll('#deductionsTableBody tr');
@@ -332,8 +308,7 @@ function readTablesIntoState() {
     const label = row.querySelector('[data-field="label"]').value || 'Inhouding';
     const amount = parseNumber(row.querySelector('[data-field="amount"]').value);
     const type = row.querySelector('[data-field="type"]').value === 'percent' ? 'percent' : 'fixed';
-    const basis = row.querySelector('[data-field="basis"]').value || 'taxableWage';
-    return { id, label, amount, type, basis };
+    return { id, label, amount, type, basis: 'taxableWage' };
   });
 }
 
@@ -402,9 +377,7 @@ function addReimbursement() {
     id: getId(),
     label: 'Representatie',
     amount: 0,
-    taxable: false,
-    svWage: false,
-    zvwWage: false
+    taxable: false
   });
   renderReimbursementsTable(state.reimbursements);
 }
@@ -573,8 +546,8 @@ function runSelfTests() {
     rates: { standby: 2, mult150: 1.5, mult200: 2 },
     hours: { normal: 160, ot150: 10, ot200: 5, standby: 8 },
     reimbursements: [
-      { id: 'a', label: 'Reiskosten', amount: 50, taxable: false, svWage: false, zvwWage: false },
-      { id: 'b', label: 'Bonus', amount: 100, taxable: true, svWage: true, zvwWage: true }
+      { id: 'a', label: 'Reiskosten', amount: 50, taxable: false },
+      { id: 'b', label: 'Bonus', amount: 100, taxable: true }
     ],
     deductions: [{ id: 'c', label: 'Pensioen', amount: 80 }],
     tax: { mode: 'preset', presetId: DEFAULTS.taxPresetId }
