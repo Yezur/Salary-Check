@@ -563,7 +563,9 @@ function attachEventListeners() {
   });
 
   document.getElementById('taxMode').addEventListener('change', recalc);
+  document.getElementById('taxMode').addEventListener('input', recalc);
   document.getElementById('taxPreset').addEventListener('change', recalc);
+  document.getElementById('taxPreset').addEventListener('input', recalc);
   document.getElementById('taxCustom').addEventListener('input', recalc);
   document.querySelectorAll('input[name="payrollPeriod"]').forEach((el) => {
     el.addEventListener('change', recalc);
