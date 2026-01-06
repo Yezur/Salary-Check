@@ -19,6 +19,7 @@ const state = {
   },
   salary: {
     monthly: 0,
+    hourly: DEFAULTS.hourlyRate,
     contractHours: DEFAULTS.contractHours
   },
   rates: {
@@ -99,6 +100,9 @@ function mergeState(saved) {
   if (saved.salary && typeof saved.salary === 'object') {
     state.salary = { ...state.salary, ...saved.salary };
   }
+  state.salary.monthly = Math.max(0, parseNumber(state.salary.monthly));
+  state.salary.hourly = Math.max(0, parseNumber(state.salary.hourly));
+  state.salary.contractHours = Math.max(0, parseNumber(state.salary.contractHours));
   state.rates = { ...state.rates, ...(saved.rates || {}) };
   state.hours = { ...state.hours, ...(saved.hours || {}) };
   state.reimbursements = Array.isArray(saved.reimbursements)
@@ -181,10 +185,12 @@ function calculateEstimatedTax(currentState, taxableWage, payrollSettings) {
 function calculate(currentState) {
   const monthlySalary = parseNumber(currentState.salary?.monthly);
   const contractHours = parseNumber(currentState.salary?.contractHours);
+  const hourlyRate = parseNumber(currentState.salary?.hourly);
   const hourlyFromSalary = contractHours > 0 ? monthlySalary / contractHours : 0;
-  const basePay = monthlySalary;
-  const ot150Pay = currentState.hours.ot150 * hourlyFromSalary * currentState.rates.mult150;
-  const ot200Pay = currentState.hours.ot200 * hourlyFromSalary * currentState.rates.mult200;
+  const baseHourly = hourlyRate > 0 ? hourlyRate : hourlyFromSalary;
+  const basePay = hourlyRate > 0 ? baseHourly * currentState.hours.normal : monthlySalary;
+  const ot150Pay = currentState.hours.ot150 * baseHourly * currentState.rates.mult150;
+  const ot200Pay = currentState.hours.ot200 * baseHourly * currentState.rates.mult200;
   const standbyPay = currentState.hours.standby * currentState.rates.standby;
   const reimbursementsTotal = currentState.reimbursements.reduce((sum, item) => sum + item.amount, 0);
   const wageBase = basePay + ot150Pay + ot200Pay + standbyPay;
@@ -378,6 +384,7 @@ function readTablesIntoState() {
 function readFormIntoState() {
   state.salary.monthly = Math.max(0, parseNumber(document.getElementById('salaryMonthly').value));
   state.salary.contractHours = Math.max(0, parseNumber(document.getElementById('contractHours').value));
+  state.salary.hourly = Math.max(0, parseNumber(document.getElementById('hourlyRate').value));
   state.rates.standby = Math.max(0, parseNumber(document.getElementById('standbyRate').value));
   state.rates.mult150 = clamp(parseNumber(document.getElementById('mult150').value) || DEFAULTS.mult150, 1, 5);
   state.rates.mult200 = clamp(parseNumber(document.getElementById('mult200').value) || DEFAULTS.mult200, 1, 5);
@@ -516,6 +523,7 @@ function resetAll() {
   localStorage.removeItem(STORAGE_KEY);
   state.salary = {
     monthly: 0,
+    hourly: DEFAULTS.hourlyRate,
     contractHours: DEFAULTS.contractHours
   };
   state.rates = {
@@ -543,6 +551,7 @@ function resetAll() {
 function hydrateForm() {
   document.getElementById('salaryMonthly').value = state.salary.monthly;
   document.getElementById('contractHours').value = state.salary.contractHours;
+  document.getElementById('hourlyRate').value = state.salary.hourly;
   document.getElementById('standbyRate').value = state.rates.standby;
   document.getElementById('mult150').value = state.rates.mult150;
   document.getElementById('mult200').value = state.rates.mult200;
@@ -571,7 +580,7 @@ function populateTaxPresets() {
 }
 
 function attachEventListeners() {
-  document.querySelectorAll('#salaryMonthly, #contractHours, #standbyRate, #mult150, #mult200, #workedDays, #hNormal, #h150, #h200, #hStandby').forEach((el) => {
+  document.querySelectorAll('#salaryMonthly, #contractHours, #hourlyRate, #standbyRate, #mult150, #mult200, #workedDays, #hNormal, #h150, #h200, #hStandby').forEach((el) => {
     el.addEventListener('input', recalc);
     el.addEventListener('change', recalc);
   });
@@ -620,7 +629,7 @@ function attachEventListeners() {
 
 function runSelfTests() {
   const exampleState = {
-    salary: { monthly: 3200, contractHours: 160 },
+    salary: { monthly: 3200, hourly: 0, contractHours: 160 },
     rates: { standby: 2, mult150: 1.5, mult200: 2 },
     hours: { normal: 160, ot150: 10, ot200: 5, standby: 8 },
     reimbursements: [
@@ -639,9 +648,29 @@ function runSelfTests() {
     hasLoonheffingskorting: exampleState.payroll.hasLoonheffingskorting
   });
   const expectedNet = expectedGross - expectedTax - 80;
+  const hourlyState = {
+    salary: { monthly: 0, hourly: 20, contractHours: 160 },
+    rates: { standby: 2, mult150: 1.5, mult200: 2 },
+    hours: { normal: 150, ot150: 6, ot200: 4, standby: 3 },
+    reimbursements: [],
+    deductions: [],
+    payroll: { period: 'month', hasLoonheffingskorting: true }
+  };
+  const hourlyResult = calculate(hourlyState);
+  const hourlyExpectedGross = (150 * 20) + (6 * 20 * 1.5) + (4 * 20 * 2) + (3 * 2);
+  const hourlyExpectedTaxable = (150 * 20) + (6 * 20 * 1.5) + (4 * 20 * 2) + (3 * 2);
+  const hourlyExpectedTax = calculatePayrollTax({
+    taxableWage: hourlyExpectedTaxable,
+    period: hourlyState.payroll.period,
+    hasLoonheffingskorting: hourlyState.payroll.hasLoonheffingskorting
+  });
+  const hourlyExpectedNet = hourlyExpectedGross - hourlyExpectedTax;
   const allGood = Math.abs(result.totals.gross - expectedGross) < 0.001 &&
     Math.abs(result.totals.taxable - expectedTaxable) < 0.001 &&
-    Math.abs(result.totals.net - expectedNet) < 0.001;
+    Math.abs(result.totals.net - expectedNet) < 0.001 &&
+    Math.abs(hourlyResult.totals.gross - hourlyExpectedGross) < 0.001 &&
+    Math.abs(hourlyResult.totals.taxable - hourlyExpectedTaxable) < 0.001 &&
+    Math.abs(hourlyResult.totals.net - hourlyExpectedNet) < 0.001;
   if (!allGood) {
     console.error('Selftest failed', { result, expectedGross, expectedTaxable, expectedNet });
   } else {
