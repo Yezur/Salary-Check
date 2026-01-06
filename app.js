@@ -358,12 +358,17 @@ function toggleHoursWarning() {
   warning.hidden = !show;
 }
 
-function render(result) {
+function render(result, options = {}) {
+  const { skipReimbursementsTable = false, skipDeductionsTable = false } = options;
   renderEarnings(result.earnings);
   renderDeductions(result.deductions);
   renderTotals(result.totals);
-  renderReimbursementsTable(state.reimbursements);
-  renderDeductionsTable(state.deductions, result.deductionDetails);
+  if (!skipReimbursementsTable) {
+    renderReimbursementsTable(state.reimbursements);
+  }
+  if (!skipDeductionsTable) {
+    renderDeductionsTable(state.deductions, result.deductionDetails);
+  }
   renderTaxUI(state.tax);
 }
 
@@ -395,9 +400,14 @@ function removeRow(event, tableSelector, collectionKey) {
 }
 
 function recalc() {
+  const activeElement = document.activeElement;
+  const reimbursementsBody = document.getElementById('reimbursementsTableBody');
+  const deductionsBody = document.getElementById('deductionsTableBody');
+  const skipReimbursementsTable = reimbursementsBody?.contains(activeElement) ?? false;
+  const skipDeductionsTable = deductionsBody?.contains(activeElement) ?? false;
   readFormIntoState();
   latestResult = calculate(state);
-  render(latestResult);
+  render(latestResult, { skipReimbursementsTable, skipDeductionsTable });
   scheduleSave();
 }
 
