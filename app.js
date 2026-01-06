@@ -202,21 +202,27 @@ function calculate(currentState) {
   });
   const otherDeductions = deductionDetails.reduce((sum, item) => sum + item.calculated, 0);
   const net = grossTotal - estimatedTax - otherDeductions;
-
-  return {
-    earnings: [
+  const earnings = [
       { label: 'Salaris', amount: basePay },
       { label: 'Overwerk 150%', amount: ot150Pay },
       { label: 'Overwerk 200%', amount: ot200Pay },
       { label: 'Standby', amount: standbyPay },
       { label: 'Vergoedingen', amount: reimbursementsTotal }
-    ],
-    deductions: [
+    ];
+  const deductions = [
       { label: 'Geschatte loonheffing', amount: estimatedTax },
       ...deductionDetails.map((d) => ({ label: d.label, amount: d.calculated }))
-    ],
+    ];
+  const totalEarnings = earnings.reduce((sum, line) => sum + line.amount, 0);
+  const totalDeductions = deductions.reduce((sum, line) => sum + line.amount, 0);
+
+  return {
+    earnings,
+    deductions,
     deductionDetails,
     totals: {
+      earnings: totalEarnings,
+      deductions: totalDeductions,
       gross: grossTotal,
       taxable: taxableWage,
       svWage,
@@ -251,6 +257,8 @@ function renderDeductions(lines) {
 }
 
 function renderTotals(totals) {
+  document.getElementById('totalsEarnings').textContent = formatCurrency(totals.earnings);
+  document.getElementById('totalsDeductions').textContent = formatCurrency(totals.deductions);
   document.getElementById('totalsGross').textContent = formatCurrency(totals.gross);
   document.getElementById('totalsTaxable').textContent = formatCurrency(totals.taxable);
   document.getElementById('totalsSvWage').textContent = formatCurrency(totals.svWage);
@@ -454,6 +462,8 @@ function exportCSV(result) {
     ['label', 'type', 'amount'],
     ...result.earnings.map((line) => [line.label, 'earning', line.amount.toFixed(2)]),
     ...result.deductions.map((line) => [line.label, 'deduction', line.amount.toFixed(2)]),
+    ['Totaal betalingen', 'total', result.totals.earnings.toFixed(2)],
+    ['Totaal inhoudingen', 'total', result.totals.deductions.toFixed(2)],
     ['Totaal bruto', 'total', result.totals.gross.toFixed(2)],
     ['Belastbaar loon', 'total', result.totals.taxable.toFixed(2)],
     ['Geschatte loonheffing', 'total', result.totals.est_tax.toFixed(2)],
