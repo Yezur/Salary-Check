@@ -7,7 +7,7 @@ Een eenvoudige, volledig client-side webapp die per maand een bruto salaris en e
 - Uurloon, standby-tarief en overwerkmultipliers invullen.
 - Uren registreren voor normaal, 150% en 200% overwerk, plus standby.
 - Vergoedingen (belast/onbelast) en inhoudingen beheren.
-- Netto-indicatie met presets (25/35/45%) of een custom percentage.
+- Netto-indicatie met presets (35,82/37,48/49,50%) of een custom percentage.
 - CSV-download en print/PDF-export.
 - Autosave naar localStorage en reset naar defaults.
 

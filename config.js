@@ -2,15 +2,15 @@ export const DEFAULTS = {
   standbyRate: 1.6,
   mult150: 1.5,
   mult200: 2.0,
-  taxPresetId: "mid35",
+  taxPresetId: "rate3582",
   payrollPeriod: "month",
   hasLoonheffingskorting: true
 };
 
 export const TAX_PRESETS = [
-  { id: "low25", label: "Laag (25%)", rate: 0.25 },
-  { id: "mid35", label: "Gemiddeld (35%)", rate: 0.35 },
-  { id: "high45", label: "Hoog (45%)", rate: 0.45 }
+  { id: "rate3582", label: "35,82%", rate: 0.3582 },
+  { id: "rate3748", label: "37,48%", rate: 0.3748 },
+  { id: "rate4950", label: "49,50%", rate: 0.495 }
 ];
 
 export const LIMITS = {
