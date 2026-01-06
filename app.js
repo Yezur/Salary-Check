@@ -84,7 +84,9 @@ function mergeState(saved) {
   }
   state.rates = { ...state.rates, ...(saved.rates || {}) };
   state.hours = { ...state.hours, ...(saved.hours || {}) };
-  state.reimbursements = Array.isArray(saved.reimbursements) ? saved.reimbursements : state.reimbursements;
+  state.reimbursements = Array.isArray(saved.reimbursements)
+    ? saved.reimbursements.map((item) => normalizeReimbursement(item))
+    : state.reimbursements;
   state.deductions = Array.isArray(saved.deductions) ? saved.deductions : state.deductions;
   state.tax = { ...state.tax, ...(saved.tax || {}) };
   state.tax.rate = clamp(state.tax.rate, LIMITS.taxRateMin, LIMITS.taxRateMax);
@@ -156,8 +158,15 @@ function calculate(currentState) {
   const taxableReimbursements = currentState.reimbursements
     .filter((item) => item.taxable)
     .reduce((sum, item) => sum + item.amount, 0);
+  const svReimbursements = currentState.reimbursements
+    .filter((item) => item.svWage)
+    .reduce((sum, item) => sum + item.amount, 0);
+  const zvwReimbursements = currentState.reimbursements
+    .filter((item) => item.zvwWage)
+    .reduce((sum, item) => sum + item.amount, 0);
   const nonTaxableReimbursements = reimbursementsTotal - taxableReimbursements;
 
+  const baseWage = basePay + ot150Pay + ot200Pay + standbyPay;
   const grossTotal = basePay + ot150Pay + ot200Pay + standbyPay + reimbursementsTotal;
   const taxableWage = basePay + ot150Pay + ot200Pay + standbyPay + taxableReimbursements;
   const payrollSettings = currentState.payroll || {
@@ -187,6 +196,8 @@ function calculate(currentState) {
     totals: {
       gross: grossTotal,
       taxable: taxableWage,
+      svWage,
+      zvwWage,
       est_tax: estimatedTax,
       net,
       non_taxable: nonTaxableReimbursements
@@ -219,6 +230,8 @@ function renderDeductions(lines) {
 function renderTotals(totals) {
   document.getElementById('totalsGross').textContent = formatCurrency(totals.gross);
   document.getElementById('totalsTaxable').textContent = formatCurrency(totals.taxable);
+  document.getElementById('totalsSvWage').textContent = formatCurrency(totals.svWage);
+  document.getElementById('totalsZvwWage').textContent = formatCurrency(totals.zvwWage);
   document.getElementById('totalsTax').textContent = formatCurrency(totals.est_tax);
   document.getElementById('totalsNet').textContent = formatCurrency(totals.net);
   document.getElementById('totalsNonTaxable').textContent = formatCurrency(totals.non_taxable);
@@ -234,6 +247,8 @@ function renderReimbursementsTable(items) {
       <td><input type="text" value="${item.label}" data-field="label" aria-label="Label" /></td>
       <td><input type="number" step="0.01" value="${item.amount}" data-field="amount" aria-label="Bedrag" /></td>
       <td style="text-align:center"><input type="checkbox" data-field="taxable" ${item.taxable ? 'checked' : ''} aria-label="Belastbaar" /></td>
+      <td style="text-align:center"><input type="checkbox" data-field="svWage" ${item.svWage ? 'checked' : ''} aria-label="SV-loon" /></td>
+      <td style="text-align:center"><input type="checkbox" data-field="zvwWage" ${item.zvwWage ? 'checked' : ''} aria-label="Zvw-loon" /></td>
       <td class="actions"><button type="button" class="ghost" data-action="remove">✕</button></td>
     `;
     body.appendChild(row);
@@ -277,7 +292,9 @@ function readTablesIntoState() {
     const label = row.querySelector('[data-field="label"]').value || 'Vergoeding';
     const amount = parseNumber(row.querySelector('[data-field="amount"]').value);
     const taxable = row.querySelector('[data-field="taxable"]').checked;
-    return { id, label, amount, taxable };
+    const svWage = row.querySelector('[data-field="svWage"]').checked;
+    const zvwWage = row.querySelector('[data-field="zvwWage"]').checked;
+    return { id, label, amount, taxable, svWage, zvwWage };
   });
 
   const deductRows = document.querySelectorAll('#deductionsTableBody tr');
@@ -353,7 +370,14 @@ function render(result) {
 }
 
 function addReimbursement() {
-  state.reimbursements.push({ id: getId(), label: 'Representatie', amount: 0, taxable: false });
+  state.reimbursements.push({
+    id: getId(),
+    label: 'Representatie',
+    amount: 0,
+    taxable: false,
+    svWage: false,
+    zvwWage: false
+  });
   renderReimbursementsTable(state.reimbursements);
 }
 
@@ -519,8 +543,8 @@ function runSelfTests() {
     rates: { base: 20, standby: 2, mult150: 1.5, mult200: 2 },
     hours: { normal: 160, ot150: 10, ot200: 5, standby: 8 },
     reimbursements: [
-      { id: 'a', label: 'Reiskosten', amount: 50, taxable: false },
-      { id: 'b', label: 'Bonus', amount: 100, taxable: true }
+      { id: 'a', label: 'Reiskosten', amount: 50, taxable: false, svWage: false, zvwWage: false },
+      { id: 'b', label: 'Bonus', amount: 100, taxable: true, svWage: true, zvwWage: true }
     ],
     deductions: [{ id: 'c', label: 'Pensioen', amount: 80 }],
     payroll: { period: 'month', hasLoonheffingskorting: true }
