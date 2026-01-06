@@ -208,14 +208,18 @@ function calculate(currentState) {
 
   const baseWage = basePay + ot150Pay + ot200Pay + standbyPay;
   const grossTotal = basePay + ot150Pay + ot200Pay + standbyPay + reimbursementsTotal;
-  const taxableWage = basePay + ot150Pay + ot200Pay + standbyPay + taxableReimbursements;
+  const taxableWage = basePay + ot150Pay + ot200Pay + taxableReimbursements;
   const svWage = baseWage + svReimbursements;
   const zvwWage = baseWage + zvwReimbursements;
   const payrollSettings = currentState.payroll || {
     period: DEFAULTS.payrollPeriod,
     hasLoonheffingskorting: DEFAULTS.hasLoonheffingskorting
   };
-  const estimatedTax = calculateEstimatedTax(currentState, taxableWage, payrollSettings);
+  const baseTaxableWage = basePay + taxableReimbursements;
+  const overtimePay = ot150Pay + ot200Pay;
+  const baseEstimatedTax = calculateEstimatedTax(currentState, baseTaxableWage, payrollSettings);
+  const overtimeTax = overtimePay * 0.5;
+  const estimatedTax = baseEstimatedTax + overtimeTax;
   const deductionDetails = currentState.deductions.map((item) => {
     const type = item.type === 'percent' ? 'percent' : 'fixed';
     const basis = item.basis || 'taxableWage';
@@ -641,12 +645,13 @@ function runSelfTests() {
   };
   const result = calculate(exampleState);
   const expectedGross = 3200 + (10 * 20 * 1.5) + (5 * 20 * 2) + (8 * 2) + 150;
-  const expectedTaxable = 3200 + (10 * 20 * 1.5) + (5 * 20 * 2) + 100 + (8 * 2);
-  const expectedTax = calculatePayrollTax({
-    taxableWage: expectedTaxable,
+  const expectedTaxable = 3200 + (10 * 20 * 1.5) + (5 * 20 * 2) + 100;
+  const expectedBaseTax = calculatePayrollTax({
+    taxableWage: 3200 + 100,
     period: exampleState.payroll.period,
     hasLoonheffingskorting: exampleState.payroll.hasLoonheffingskorting
   });
+  const expectedTax = expectedBaseTax + 0.5 * ((10 * 20 * 1.5) + (5 * 20 * 2));
   const expectedNet = expectedGross - expectedTax - 80;
   const hourlyState = {
     salary: { monthly: 0, hourly: 20, contractHours: 160 },
@@ -658,12 +663,13 @@ function runSelfTests() {
   };
   const hourlyResult = calculate(hourlyState);
   const hourlyExpectedGross = (150 * 20) + (6 * 20 * 1.5) + (4 * 20 * 2) + (3 * 2);
-  const hourlyExpectedTaxable = (150 * 20) + (6 * 20 * 1.5) + (4 * 20 * 2) + (3 * 2);
-  const hourlyExpectedTax = calculatePayrollTax({
-    taxableWage: hourlyExpectedTaxable,
+  const hourlyExpectedTaxable = (150 * 20) + (6 * 20 * 1.5) + (4 * 20 * 2);
+  const hourlyExpectedBaseTax = calculatePayrollTax({
+    taxableWage: 150 * 20,
     period: hourlyState.payroll.period,
     hasLoonheffingskorting: hourlyState.payroll.hasLoonheffingskorting
   });
+  const hourlyExpectedTax = hourlyExpectedBaseTax + 0.5 * ((6 * 20 * 1.5) + (4 * 20 * 2));
   const hourlyExpectedNet = hourlyExpectedGross - hourlyExpectedTax;
   const allGood = Math.abs(result.totals.gross - expectedGross) < 0.001 &&
     Math.abs(result.totals.taxable - expectedTaxable) < 0.001 &&
