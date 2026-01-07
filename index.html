@@ -11,8 +11,8 @@
   <header class="page-header">
     <div>
       <h1>Salarisindicatie per periode</h1>
-      <p>Bereken bruto en een eenvoudige netto-indicatie op basis van overwerk, standby en handmatige vergoedingen/inhoudingen. Alles draait lokaal in je browser.</p>
-      <p class="disclaimer">Let op: netto is een indicatie op basis van loonheffingstabellen en heffingskortingen. Geen pensioen- of overige inhoudingsregels.</p>
+      <p>Bereken bruto en inhoudingen voor overwerk, standby en handmatige vergoedingen/inhoudingen. Alles draait lokaal in je browser.</p>
+      <p class="disclaimer">Let op: overuren worden belast met een vast tarief van 50,33%. Standby is onbelast; overige inhoudingen voeg je handmatig toe.</p>
     </div>
     <div class="meta">
       <span class="pill">Client-side</span>
@@ -95,27 +95,6 @@
       </div>
     </section>
 
-    <section class="card" aria-labelledby="tax-title">
-      <div class="section-header">
-        <h2 id="tax-title">Netto indicatie</h2>
-      </div>
-      <div class="tax-controls">
-        <label for="taxMode">Berekeningsmodus
-          <select id="taxMode">
-            <option value="preset">Preset</option>
-            <option value="custom">Custom</option>
-          </select>
-        </label>
-        <label for="taxPreset">Preset
-          <select id="taxPreset"></select>
-        </label>
-        <label for="taxCustom">Custom percentage
-          <input type="number" id="taxCustom" min="0" max="60" step="0.5" aria-describedby="taxCustomHelp" />
-          <small id="taxCustomHelp">% vlak tarief. Standby is onbelast; overuren worden apart belast.</small>
-        </label>
-      </div>
-    </section>
-
     <section id="results" class="results">
       <div class="card" aria-labelledby="earnings-title">
         <div class="section-header">
@@ -129,7 +108,7 @@
         <div class="section-header">
           <h2 id="deductions-title">Inhoudingen</h2>
         </div>
-        <small>Toont aparte regels voor loonheffing (basis) en belasting overuren 50,33%.</small>
+        <small>Toont aparte regel voor belasting overuren 50,33% en handmatige inhoudingen.</small>
         <div id="deductionLines" class="line-items"></div>
       </div>
 
@@ -139,12 +118,9 @@
         </div>
         <div class="line"><span>Totaal betalingen (overuren + standby)</span><strong id="totalsEarnings">€ 0,00</strong></div>
         <div class="line"><span>Totaal inhoudingen</span><strong id="totalsDeductions">€ 0,00</strong></div>
-        <div class="line"><span>Belastbaar loon (overuren + belastbare vergoedingen)</span><strong id="totalsTaxable">€ 0,00</strong></div>
-        <div class="line"><span>Loonheffing (basis)</span><strong id="totalsBaseTax">€ 0,00</strong></div>
+        <div class="line"><span>Belastbaar loon (belastbare vergoedingen − inhoudingen)</span><strong id="totalsTaxable">€ 0,00</strong></div>
         <div class="line"><span>Belasting overuren 50,33%</span><strong id="totalsOvertimeTax">€ 0,00</strong></div>
-        <div class="line"><span>Geschatte loonheffing</span><strong id="totalsTax">€ 0,00</strong></div>
         <div class="line"><span>Onbelaste vergoedingen</span><strong id="totalsNonTaxable">€ 0,00</strong></div>
-        <div class="line total"><span>Netto indicatie</span><strong id="totalsNet">€ 0,00</strong></div>
       </div>
 
       <div class="card print-only" aria-labelledby="hours-summary-title">
@@ -182,12 +158,7 @@
           (minimaal € 0).
         </li>
         <li>
-          <strong>Loonheffing.</strong> Op het belastbare loon wordt het preset- of custompercentage toegepast.
-          Overuren worden apart belast met 50,33%.
-        </li>
-        <li>
-          <strong>Netto indicatie.</strong> Netto = totaal bruto − geschatte loonheffing − alle inhoudingen.
-          Onbelaste vergoedingen worden apart getoond.
+          <strong>Belasting overuren.</strong> Overuren worden apart belast met 50,33%. Standby blijft onbelast.
         </li>
         <li>
           <strong>Urenvelden.</strong> Gewerkte dagen vullen normale uren (×8) en zijn ter controle.
