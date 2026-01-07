@@ -146,6 +146,7 @@ function calculate(currentState) {
     ];
   const totalEarnings = wageBase;
   const totalDeductions = deductions.reduce((sum, line) => sum + line.amount, 0);
+  const netTotal = grossTotal - totalDeductions;
 
   return {
     earnings,
@@ -155,6 +156,7 @@ function calculate(currentState) {
       reimbursements: reimbursementsTotal,
       deductions: totalDeductions,
       gross: grossTotal,
+      net: netTotal,
       taxable: taxableWage,
       overtime_tax: overtimeTax,
       non_taxable: nonTaxableReimbursements
@@ -189,6 +191,7 @@ function renderTotals(totals) {
   document.getElementById('totalsReimbursements').textContent = formatCurrency(totals.reimbursements);
   document.getElementById('totalsDeductions').textContent = formatCurrency(totals.deductions);
   document.getElementById('totalsGross').textContent = formatCurrency(totals.gross);
+  document.getElementById('totalsNet').textContent = formatCurrency(totals.net);
   document.getElementById('totalsOvertimeTax').textContent = formatCurrency(totals.overtime_tax);
   document.getElementById('totalsNonTaxable').textContent = formatCurrency(totals.non_taxable);
 }
@@ -355,6 +358,7 @@ function exportCSV(result) {
     ['Totaal vergoedingen', 'total', exportResult.totals.reimbursements.toFixed(2)],
     ['Totaal inhoudingen', 'total', exportResult.totals.deductions.toFixed(2)],
     ['Totaal bruto', 'total', exportResult.totals.gross.toFixed(2)],
+    ['Totaal netto', 'total', exportResult.totals.net.toFixed(2)],
     ['Belasting overuren 50,33%', 'total', exportResult.totals.overtime_tax.toFixed(2)],
     ['Onbelaste vergoedingen', 'info', exportResult.totals.non_taxable.toFixed(2)],
     ['Timestamp', 'meta', new Date().toISOString()]
@@ -467,6 +471,7 @@ function runSelfTests() {
   const expectedTaxable = 100;
   const expectedOvertimeTax = ((10 * 20 * 1.5) + (5 * 20 * 2)) * OVERTIME_TAX_RATE;
   const expectedDeductionsTotal = expectedOvertimeTax + 80;
+  const expectedNet = expectedGross - expectedDeductionsTotal;
   const hourlyState = {
     salary: { hourly: 20 },
     rates: { standby: 2, mult150: 1.5, mult200: 2 },
@@ -479,13 +484,16 @@ function runSelfTests() {
   const hourlyExpectedTaxable = 0;
   const hourlyExpectedOvertimeTax = ((6 * 20 * 1.5) + (4 * 20 * 2)) * OVERTIME_TAX_RATE;
   const hourlyExpectedDeductionsTotal = hourlyExpectedOvertimeTax;
+  const hourlyExpectedNet = hourlyExpectedGross - hourlyExpectedDeductionsTotal;
   const allGood = Math.abs(result.totals.gross - expectedGross) < 0.001 &&
     Math.abs(result.totals.taxable - expectedTaxable) < 0.001 &&
     Math.abs(result.totals.deductions - expectedDeductionsTotal) < 0.001 &&
+    Math.abs(result.totals.net - expectedNet) < 0.001 &&
     Math.abs(result.totals.overtime_tax - expectedOvertimeTax) < 0.001 &&
     Math.abs(hourlyResult.totals.gross - hourlyExpectedGross) < 0.001 &&
     Math.abs(hourlyResult.totals.taxable - hourlyExpectedTaxable) < 0.001 &&
     Math.abs(hourlyResult.totals.deductions - hourlyExpectedDeductionsTotal) < 0.001 &&
+    Math.abs(hourlyResult.totals.net - hourlyExpectedNet) < 0.001 &&
     Math.abs(hourlyResult.totals.overtime_tax - hourlyExpectedOvertimeTax) < 0.001;
   if (!allGood) {
     console.error('Selftest failed', { result, expectedGross, expectedTaxable, expectedDeductionsTotal });
