@@ -174,7 +174,7 @@ function calculate(currentState) {
       { label: 'Belasting overuren 50,33%', amount: overtimeTax },
       ...currentState.deductions.map((d) => ({ label: d.label, amount: d.amount }))
     ];
-  const totalEarnings = earnings.reduce((sum, line) => sum + line.amount, 0);
+  const totalEarnings = wageBase;
   const totalDeductions = deductions.reduce((sum, line) => sum + line.amount, 0);
 
   return {
