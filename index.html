@@ -47,6 +47,12 @@
         <div id="hoursWarning" class="warning" role="status" aria-live="polite" hidden>Controleer je uren: ongebruikelijk hoog.</div>
       </div>
       <div class="grid two-cols">
+        <label for="workedDays">Gewerkte dagen
+          <input type="number" id="workedDays" min="0" step="0.1" />
+        </label>
+        <label for="hNormal">Normale uren
+          <input type="number" id="hNormal" min="0" step="0.1" />
+        </label>
         <label for="h150">Overuren 150%
           <input type="number" id="h150" min="0" step="0.1" />
         </label>
@@ -145,6 +151,8 @@
         <div class="section-header">
           <h2 id="hours-summary-title">Urenoverzicht</h2>
         </div>
+        <div class="line"><span>Gewerkte dagen</span><strong id="summaryWorkedDays">0</strong></div>
+        <div class="line"><span>Normale uren</span><strong id="summaryNormalHours">0</strong></div>
         <div class="line"><span>Overuren 150%</span><strong id="summaryOvertime150">0</strong></div>
         <div class="line"><span>Overuren 200%</span><strong id="summaryOvertime200">0</strong></div>
         <div class="line"><span>Standby uren</span><strong id="summaryStandbyHours">0</strong></div>
