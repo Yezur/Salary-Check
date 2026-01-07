@@ -311,16 +311,19 @@ function readFormIntoState() {
 
   const normalHoursInput = document.getElementById('hNormal');
   const workedDaysInput = document.getElementById('workedDays');
-  const workedDaysRaw = workedDaysInput.value;
-  const manualNormalHours = Math.max(0, parseNumber(normalHoursInput.value));
-  state.workedDays = Math.max(0, parseNumber(workedDaysRaw));
-  const normalFromDays = state.workedDays * HOURS_PER_DAY;
 
-  if (workedDaysRaw !== '') {
-    state.hours.normal = normalFromDays;
-    normalHoursInput.value = state.hours.normal;
-  } else {
-    state.hours.normal = manualNormalHours;
+  if (normalHoursInput && workedDaysInput) {
+    const workedDaysRaw = workedDaysInput.value;
+    const manualNormalHours = Math.max(0, parseNumber(normalHoursInput.value));
+    state.workedDays = Math.max(0, parseNumber(workedDaysRaw));
+    const normalFromDays = state.workedDays * HOURS_PER_DAY;
+
+    if (workedDaysRaw !== '') {
+      state.hours.normal = normalFromDays;
+      normalHoursInput.value = state.hours.normal;
+    } else {
+      state.hours.normal = manualNormalHours;
+    }
   }
   state.hours.ot150 = Math.max(0, parseNumber(document.getElementById('h150').value));
   state.hours.ot200 = Math.max(0, parseNumber(document.getElementById('h200').value));
