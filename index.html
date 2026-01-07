@@ -11,7 +11,7 @@
   <header class="page-header">
     <div>
       <h1>Salarisindicatie per periode</h1>
-      <p>Bereken bruto en een eenvoudige netto-indicatie op basis van maandsalaris, toeslagen en handmatige vergoedingen/inhoudingen. Alles draait lokaal in je browser.</p>
+      <p>Bereken bruto en een eenvoudige netto-indicatie op basis van overuren, standby en handmatige vergoedingen/inhoudingen. Alles draait lokaal in je browser.</p>
       <p class="disclaimer">Let op: netto is een indicatie op basis van loonheffingstabellen en heffingskortingen. Geen pensioen- of overige inhoudingsregels.</p>
     </div>
     <div class="meta">
@@ -26,9 +26,6 @@
         <h2 id="rates-title">Tarieven</h2>
       </div>
       <div class="grid two-cols">
-        <label for="salaryMonthly">Maandsalaris (bruto)
-          <input type="number" id="salaryMonthly" min="0" step="0.01" placeholder="0,00" />
-        </label>
         <label for="hourlyRate">Uurloon (bruto/uur voor overuren)
           <input type="number" id="hourlyRate" min="0" step="0.01" placeholder="0,00" />
         </label>
@@ -50,12 +47,6 @@
         <div id="hoursWarning" class="warning" role="status" aria-live="polite" hidden>Controleer je uren: ongebruikelijk hoog.</div>
       </div>
       <div class="grid two-cols">
-        <label for="workedDays">Gewerkte dagen (x8 uur)
-          <input type="number" id="workedDays" min="0" step="0.5" />
-        </label>
-        <label for="hNormal">Normale uren
-          <input type="number" id="hNormal" min="0" step="0.1" />
-        </label>
         <label for="h150">Overuren 150%
           <input type="number" id="h150" min="0" step="0.1" />
         </label>
@@ -122,10 +113,10 @@
     <section id="results" class="results">
       <div class="card" aria-labelledby="earnings-title">
         <div class="section-header">
-          <h2 id="earnings-title">Betalingen</h2>
+          <h2 id="earnings-title">Betalingen (overuren & standby)</h2>
         </div>
         <div id="earningsLines" class="line-items"></div>
-        <div class="line total"><span>Totaal bruto</span><strong id="totalsGross">€ 0,00</strong></div>
+        <div class="line total"><span>Totaal bruto (overuren, standby, vergoedingen)</span><strong id="totalsGross">€ 0,00</strong></div>
       </div>
 
       <div class="card" aria-labelledby="deductions-title">
@@ -140,9 +131,9 @@
         <div class="section-header">
           <h2 id="totals-title">Totalen</h2>
         </div>
-        <div class="line"><span>Totaal betalingen</span><strong id="totalsEarnings">€ 0,00</strong></div>
+        <div class="line"><span>Totaal betalingen (overuren + standby)</span><strong id="totalsEarnings">€ 0,00</strong></div>
         <div class="line"><span>Totaal inhoudingen</span><strong id="totalsDeductions">€ 0,00</strong></div>
-        <div class="line"><span>Belastbaar loon</span><strong id="totalsTaxable">€ 0,00</strong></div>
+        <div class="line"><span>Belastbaar loon (overuren + belastbare vergoedingen)</span><strong id="totalsTaxable">€ 0,00</strong></div>
         <div class="line"><span>Loonheffing (basis)</span><strong id="totalsBaseTax">€ 0,00</strong></div>
         <div class="line"><span>Belasting overuren 50,33%</span><strong id="totalsOvertimeTax">€ 0,00</strong></div>
         <div class="line"><span>Geschatte loonheffing</span><strong id="totalsTax">€ 0,00</strong></div>
@@ -154,8 +145,6 @@
         <div class="section-header">
           <h2 id="hours-summary-title">Urenoverzicht</h2>
         </div>
-        <div class="line"><span>Gewerkte dagen</span><strong id="summaryWorkedDays">0</strong></div>
-        <div class="line"><span>Normale uren</span><strong id="summaryNormalHours">0</strong></div>
         <div class="line"><span>Overuren 150%</span><strong id="summaryOvertime150">0</strong></div>
         <div class="line"><span>Overuren 200%</span><strong id="summaryOvertime200">0</strong></div>
         <div class="line"><span>Standby uren</span><strong id="summaryStandbyHours">0</strong></div>
@@ -177,11 +166,11 @@
       </p>
       <ol class="calc-steps">
         <li>
-          <strong>Bruto basis en toeslagen.</strong> Maandsalaris is de basis. Overwerk = uren × uurloon × multiplier.
+          <strong>Bruto betalingen.</strong> Overwerk = uren × uurloon × multiplier.
           Standby = standby-uren × standby-tarief. Vergoedingen tellen mee in het bruto totaal.
         </li>
         <li>
-          <strong>Belastbaar loon.</strong> Belastbaar loon = maandsalaris + belastbare vergoedingen − belastbare inhoudingen
+          <strong>Belastbaar loon.</strong> Belastbaar loon = belastbare overuren + belastbare vergoedingen − belastbare inhoudingen
           (minimaal € 0).
         </li>
         <li>
@@ -191,9 +180,6 @@
         <li>
           <strong>Netto indicatie.</strong> Netto = totaal bruto − geschatte loonheffing − alle inhoudingen.
           Onbelaste vergoedingen worden apart getoond.
-        </li>
-        <li>
-          <strong>Urenvelden.</strong> Gewerkte dagen vullen normale uren (×8) en zijn ter controle; het bedrag komt uit het maandsalaris.
         </li>
       </ol>
     </section>
