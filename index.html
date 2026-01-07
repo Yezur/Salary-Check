@@ -11,7 +11,7 @@
   <header class="page-header">
     <div>
       <h1>Salarisindicatie per periode</h1>
-      <p>Bereken bruto en een eenvoudige netto-indicatie op basis van maandsalaris, toeslagen en handmatige vergoedingen/inhoudingen. Alles draait lokaal in je browser.</p>
+      <p>Bereken bruto en een eenvoudige netto-indicatie op basis van overwerk, standby en handmatige vergoedingen/inhoudingen. Alles draait lokaal in je browser.</p>
       <p class="disclaimer">Let op: netto is een indicatie op basis van loonheffingstabellen en heffingskortingen. Geen pensioen- of overige inhoudingsregels.</p>
     </div>
     <div class="meta">
@@ -26,9 +26,6 @@
         <h2 id="rates-title">Tarieven</h2>
       </div>
       <div class="grid two-cols">
-        <label for="salaryMonthly">Maandsalaris (bruto)
-          <input type="number" id="salaryMonthly" min="0" step="0.01" placeholder="0,00" />
-        </label>
         <label for="hourlyRate">Uurloon (bruto/uur voor overuren)
           <input type="number" id="hourlyRate" min="0" step="0.01" placeholder="0,00" />
         </label>
@@ -177,11 +174,11 @@
       </p>
       <ol class="calc-steps">
         <li>
-          <strong>Bruto basis en toeslagen.</strong> Maandsalaris is de basis. Overwerk = uren × uurloon × multiplier.
+          <strong>Bruto basis en toeslagen.</strong> Overwerk = uren × uurloon × multiplier.
           Standby = standby-uren × standby-tarief. Vergoedingen tellen mee in het bruto totaal.
         </li>
         <li>
-          <strong>Belastbaar loon.</strong> Belastbaar loon = maandsalaris + belastbare vergoedingen − belastbare inhoudingen
+          <strong>Belastbaar loon.</strong> Belastbaar loon = belastbare vergoedingen − belastbare inhoudingen
           (minimaal € 0).
         </li>
         <li>
@@ -193,7 +190,7 @@
           Onbelaste vergoedingen worden apart getoond.
         </li>
         <li>
-          <strong>Urenvelden.</strong> Gewerkte dagen vullen normale uren (×8) en zijn ter controle; het bedrag komt uit het maandsalaris.
+          <strong>Urenvelden.</strong> Gewerkte dagen vullen normale uren (×8) en zijn ter controle.
         </li>
       </ol>
     </section>
