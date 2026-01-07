@@ -152,6 +152,7 @@ function calculate(currentState) {
     deductions,
     totals: {
       earnings: totalEarnings,
+      reimbursements: reimbursementsTotal,
       deductions: totalDeductions,
       gross: grossTotal,
       taxable: taxableWage,
@@ -185,9 +186,9 @@ function renderDeductions(lines) {
 
 function renderTotals(totals) {
   document.getElementById('totalsEarnings').textContent = formatCurrency(totals.earnings);
+  document.getElementById('totalsReimbursements').textContent = formatCurrency(totals.reimbursements);
   document.getElementById('totalsDeductions').textContent = formatCurrency(totals.deductions);
   document.getElementById('totalsGross').textContent = formatCurrency(totals.gross);
-  document.getElementById('totalsTaxable').textContent = formatCurrency(totals.taxable);
   document.getElementById('totalsOvertimeTax').textContent = formatCurrency(totals.overtime_tax);
   document.getElementById('totalsNonTaxable').textContent = formatCurrency(totals.non_taxable);
 }
@@ -351,9 +352,9 @@ function exportCSV(result) {
     ...exportEarnings.map((line) => [line.label, 'earning', line.amount.toFixed(2)]),
     ...exportResult.deductions.map((line) => [line.label, 'deduction', line.amount.toFixed(2)]),
     ['Totaal betalingen', 'total', exportResult.totals.earnings.toFixed(2)],
+    ['Totaal vergoedingen', 'total', exportResult.totals.reimbursements.toFixed(2)],
     ['Totaal inhoudingen', 'total', exportResult.totals.deductions.toFixed(2)],
     ['Totaal bruto', 'total', exportResult.totals.gross.toFixed(2)],
-    ['Belastbaar loon', 'total', exportResult.totals.taxable.toFixed(2)],
     ['Belasting overuren 50,33%', 'total', exportResult.totals.overtime_tax.toFixed(2)],
     ['Onbelaste vergoedingen', 'info', exportResult.totals.non_taxable.toFixed(2)],
     ['Timestamp', 'meta', new Date().toISOString()]
