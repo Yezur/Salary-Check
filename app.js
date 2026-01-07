@@ -1,4 +1,4 @@
-import { DEFAULTS, TAX_PRESETS, LIMITS } from './config.js';
+import { DEFAULTS, LIMITS } from './config.js';
 
 const STORAGE_KEY = 'paycalc:v1';
 const SAVE_DEBOUNCE_MS = 300;
@@ -29,12 +29,7 @@ const state = {
     standby: 0
   },
   reimbursements: [],
-  deductions: [],
-  tax: {
-    mode: 'preset',
-    presetId: DEFAULTS.taxPresetId,
-    rate: TAX_PRESETS.find((p) => p.id === DEFAULTS.taxPresetId)?.rate ?? 0.35
-  }
+  deductions: []
 };
 
 let saveTimer = null;
@@ -94,16 +89,8 @@ function mergeState(saved) {
     ? saved.reimbursements.map((item) => normalizeReimbursement(item))
     : state.reimbursements;
   state.deductions = Array.isArray(saved.deductions) ? normalizeDeductions(saved.deductions) : state.deductions;
-  state.tax = { ...state.tax, ...(saved.tax || {}) };
-  state.tax.rate = clamp(state.tax.rate, LIMITS.taxRateMin, LIMITS.taxRateMax);
-  state.tax.mode = state.tax.mode === 'custom' ? 'custom' : 'preset';
   if (state.workedDays > 0) {
     state.hours.normal = state.workedDays * HOURS_PER_DAY;
-  }
-  if (state.tax.mode === 'preset' && state.tax.presetId) {
-    const preset = TAX_PRESETS.find((p) => p.id === state.tax.presetId) || TAX_PRESETS.find((p) => p.id === DEFAULTS.taxPresetId);
-    state.tax.rate = preset.rate;
-    state.tax.presetId = preset.id;
   }
 }
 
@@ -126,18 +113,6 @@ function formatHours(value) {
   return hoursFormatter.format(value);
 }
 
-function calculateEstimatedTax(currentState, taxableWage) {
-  const tax = currentState.tax ?? {};
-  const mode = tax.mode === 'custom' ? 'custom' : 'preset';
-  if (mode === 'custom') {
-    const rate = clamp(parseNumber(tax.rate), LIMITS.taxRateMin, LIMITS.taxRateMax);
-    return taxableWage * rate;
-  }
-  const preset = TAX_PRESETS.find((p) => p.id === tax.presetId) || TAX_PRESETS.find((p) => p.id === DEFAULTS.taxPresetId);
-  const rate = clamp(parseNumber(preset?.rate ?? tax.rate), LIMITS.taxRateMin, LIMITS.taxRateMax);
-  return taxableWage * rate;
-}
-
 function calculate(currentState) {
   const hourlyRate = parseNumber(currentState.salary?.hourly);
   const baseHourly = hourlyRate;
@@ -157,12 +132,8 @@ function calculate(currentState) {
     .reduce((sum, item) => sum + item.amount, 0);
 
   const grossTotal = wageBase + reimbursementsTotal;
-  const baseTaxableWage = taxableReimbursements;
-  const taxableWage = Math.max(0, baseTaxableWage - taxableDeductions);
-  const baseTax = calculateEstimatedTax(currentState, taxableWage);
+  const taxableWage = Math.max(0, taxableReimbursements - taxableDeductions);
   const overtimeTax = (ot150Pay + ot200Pay) * OVERTIME_TAX_RATE;
-  const estimatedTax = baseTax + overtimeTax;
-  const net = grossTotal - estimatedTax - deductionsTotal;
   const earnings = [
       { label: 'Overwerk 150%', amount: ot150Pay },
       { label: 'Overwerk 200%', amount: ot200Pay },
@@ -170,7 +141,6 @@ function calculate(currentState) {
       { label: 'Vergoedingen', amount: reimbursementsTotal }
     ];
   const deductions = [
-      { label: 'Loonheffing (basis)', amount: baseTax },
       { label: 'Belasting overuren 50,33%', amount: overtimeTax },
       ...currentState.deductions.map((d) => ({ label: d.label, amount: d.amount }))
     ];
@@ -185,10 +155,7 @@ function calculate(currentState) {
       deductions: totalDeductions,
       gross: grossTotal,
       taxable: taxableWage,
-      base_tax: baseTax,
       overtime_tax: overtimeTax,
-      est_tax: estimatedTax,
-      net,
       non_taxable: nonTaxableReimbursements
     }
   };
@@ -221,10 +188,7 @@ function renderTotals(totals) {
   document.getElementById('totalsDeductions').textContent = formatCurrency(totals.deductions);
   document.getElementById('totalsGross').textContent = formatCurrency(totals.gross);
   document.getElementById('totalsTaxable').textContent = formatCurrency(totals.taxable);
-  document.getElementById('totalsBaseTax').textContent = formatCurrency(totals.base_tax);
   document.getElementById('totalsOvertimeTax').textContent = formatCurrency(totals.overtime_tax);
-  document.getElementById('totalsTax').textContent = formatCurrency(totals.est_tax);
-  document.getElementById('totalsNet').textContent = formatCurrency(totals.net);
   document.getElementById('totalsNonTaxable').textContent = formatCurrency(totals.non_taxable);
 }
 
@@ -266,21 +230,6 @@ function renderDeductionsTable(items) {
     `;
     body.appendChild(row);
   });
-}
-
-function renderTaxUI(tax) {
-  const modeEl = document.getElementById('taxMode');
-  const presetEl = document.getElementById('taxPreset');
-  const customEl = document.getElementById('taxCustom');
-
-  modeEl.value = tax.mode;
-  presetEl.disabled = tax.mode !== 'preset';
-  customEl.disabled = tax.mode !== 'custom';
-  if (tax.mode === 'custom') {
-    customEl.value = Math.round(tax.rate * 1000) / 10;
-  } else {
-    presetEl.value = tax.presetId || DEFAULTS.taxPresetId;
-  }
 }
 
 function readTablesIntoState() {
@@ -329,21 +278,6 @@ function readFormIntoState() {
   state.hours.ot200 = Math.max(0, parseNumber(document.getElementById('h200').value));
   state.hours.standby = Math.max(0, parseNumber(document.getElementById('hStandby').value));
 
-  const modeEl = document.getElementById('taxMode');
-  const presetEl = document.getElementById('taxPreset');
-  const customEl = document.getElementById('taxCustom');
-  state.tax.mode = modeEl.value === 'custom' ? 'custom' : 'preset';
-
-  if (state.tax.mode === 'preset') {
-    const preset = TAX_PRESETS.find((p) => p.id === presetEl.value) || TAX_PRESETS.find((p) => p.id === DEFAULTS.taxPresetId);
-    state.tax.presetId = preset.id;
-    state.tax.rate = preset.rate;
-  } else {
-    const customPercent = clamp(parseNumber(customEl.value), LIMITS.taxRateMin * 100, LIMITS.taxRateMax * 100);
-    state.tax.rate = customPercent / 100;
-    state.tax.presetId = null;
-  }
-
   readTablesIntoState();
   toggleHoursWarning();
 }
@@ -367,7 +301,6 @@ function render(result, options = {}) {
   if (!skipDeductionsTable) {
     renderDeductionsTable(state.deductions);
   }
-  renderTaxUI(state.tax);
 }
 
 function addReimbursement() {
@@ -421,10 +354,7 @@ function exportCSV(result) {
     ['Totaal inhoudingen', 'total', exportResult.totals.deductions.toFixed(2)],
     ['Totaal bruto', 'total', exportResult.totals.gross.toFixed(2)],
     ['Belastbaar loon', 'total', exportResult.totals.taxable.toFixed(2)],
-    ['Loonheffing (basis)', 'total', exportResult.totals.base_tax.toFixed(2)],
     ['Belasting overuren 50,33%', 'total', exportResult.totals.overtime_tax.toFixed(2)],
-    ['Totaal loonheffing', 'total', exportResult.totals.est_tax.toFixed(2)],
-    ['Netto indicatie', 'total', exportResult.totals.net.toFixed(2)],
     ['Onbelaste vergoedingen', 'info', exportResult.totals.non_taxable.toFixed(2)],
     ['Timestamp', 'meta', new Date().toISOString()]
   ];
@@ -462,11 +392,6 @@ function resetAll() {
   state.workedDays = 0;
   state.reimbursements = [];
   state.deductions = [];
-  state.tax = {
-    mode: 'preset',
-    presetId: DEFAULTS.taxPresetId,
-    rate: TAX_PRESETS.find((p) => p.id === DEFAULTS.taxPresetId)?.rate ?? 0.35
-  };
   hydrateForm();
   recalc();
 }
@@ -485,17 +410,6 @@ function hydrateForm() {
   document.getElementById('hStandby').value = state.hours.standby;
   renderReimbursementsTable(state.reimbursements);
   renderDeductionsTable(state.deductions);
-  renderTaxUI(state.tax);
-}
-
-function populateTaxPresets() {
-  const select = document.getElementById('taxPreset');
-  TAX_PRESETS.forEach((preset) => {
-    const option = document.createElement('option');
-    option.value = preset.id;
-    option.textContent = preset.label;
-    select.appendChild(option);
-  });
 }
 
 function attachEventListeners() {
@@ -503,12 +417,6 @@ function attachEventListeners() {
     el.addEventListener('input', recalc);
     el.addEventListener('change', recalc);
   });
-
-  document.getElementById('taxMode').addEventListener('change', recalc);
-  document.getElementById('taxMode').addEventListener('input', recalc);
-  document.getElementById('taxPreset').addEventListener('change', recalc);
-  document.getElementById('taxPreset').addEventListener('input', recalc);
-  document.getElementById('taxCustom').addEventListener('input', recalc);
 
   document.getElementById('addReimbursement').addEventListener('click', () => {
     addReimbursement();
@@ -551,47 +459,41 @@ function runSelfTests() {
       { id: 'a', label: 'Reiskosten', amount: 50, taxable: false },
       { id: 'b', label: 'Bonus', amount: 100, taxable: true }
     ],
-    deductions: [{ id: 'c', label: 'Pensioen', amount: 80 }],
-    tax: { mode: 'preset', presetId: DEFAULTS.taxPresetId }
+    deductions: [{ id: 'c', label: 'Pensioen', amount: 80 }]
   };
   const result = calculate(exampleState);
   const expectedGross = (10 * 20 * 1.5) + (5 * 20 * 2) + (8 * 2) + 150;
   const expectedTaxable = 100;
-  const expectedTaxRate = TAX_PRESETS.find((p) => p.id === DEFAULTS.taxPresetId).rate;
   const expectedOvertimeTax = ((10 * 20 * 1.5) + (5 * 20 * 2)) * OVERTIME_TAX_RATE;
-  const expectedTax = (expectedTaxable * expectedTaxRate) + expectedOvertimeTax;
-  const expectedDeductionsTotal = expectedTax + 80;
-  const expectedNet = expectedGross - expectedTax - expectedDeductionsTotal;
+  const expectedDeductionsTotal = expectedOvertimeTax + 80;
   const hourlyState = {
     salary: { hourly: 20 },
     rates: { standby: 2, mult150: 1.5, mult200: 2 },
     hours: { normal: 150, ot150: 6, ot200: 4, standby: 3 },
     reimbursements: [],
-    deductions: [],
-    tax: { mode: 'preset', presetId: DEFAULTS.taxPresetId }
+    deductions: []
   };
   const hourlyResult = calculate(hourlyState);
   const hourlyExpectedGross = (6 * 20 * 1.5) + (4 * 20 * 2) + (3 * 2);
   const hourlyExpectedTaxable = 0;
   const hourlyExpectedOvertimeTax = ((6 * 20 * 1.5) + (4 * 20 * 2)) * OVERTIME_TAX_RATE;
-  const hourlyExpectedTax = (hourlyExpectedTaxable * expectedTaxRate) + hourlyExpectedOvertimeTax;
-  const hourlyExpectedDeductionsTotal = hourlyExpectedTax;
-  const hourlyExpectedNet = hourlyExpectedGross - hourlyExpectedTax - hourlyExpectedDeductionsTotal;
+  const hourlyExpectedDeductionsTotal = hourlyExpectedOvertimeTax;
   const allGood = Math.abs(result.totals.gross - expectedGross) < 0.001 &&
     Math.abs(result.totals.taxable - expectedTaxable) < 0.001 &&
-    Math.abs(result.totals.net - expectedNet) < 0.001 &&
+    Math.abs(result.totals.deductions - expectedDeductionsTotal) < 0.001 &&
+    Math.abs(result.totals.overtime_tax - expectedOvertimeTax) < 0.001 &&
     Math.abs(hourlyResult.totals.gross - hourlyExpectedGross) < 0.001 &&
     Math.abs(hourlyResult.totals.taxable - hourlyExpectedTaxable) < 0.001 &&
-    Math.abs(hourlyResult.totals.net - hourlyExpectedNet) < 0.001;
+    Math.abs(hourlyResult.totals.deductions - hourlyExpectedDeductionsTotal) < 0.001 &&
+    Math.abs(hourlyResult.totals.overtime_tax - hourlyExpectedOvertimeTax) < 0.001;
   if (!allGood) {
-    console.error('Selftest failed', { result, expectedGross, expectedTaxable, expectedNet });
+    console.error('Selftest failed', { result, expectedGross, expectedTaxable, expectedDeductionsTotal });
   } else {
     console.info('Selftest ok');
   }
 }
 
 function init() {
-  populateTaxPresets();
   loadFromStorage();
   hydrateForm();
   attachEventListeners();

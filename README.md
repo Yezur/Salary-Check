@@ -1,17 +1,17 @@
 # Salary Check (client-side)
 https://yezur.github.io/Salary-Check/
 
-Een eenvoudige, volledig client-side webapp die per maand een bruto salaris en een vlakke netto-indicatie berekent. Alle data blijft in de browser (localStorage); er is geen backend of tracking.
+Een eenvoudige, volledig client-side webapp die per maand bruto betalingen en inhoudingen rond overwerk en standby berekent. Overuren worden belast met een vast tarief (50,33%), terwijl standby onbelast blijft. Alle data blijft in de browser (localStorage); er is geen backend of tracking.
 
 ## Wat kun je ermee?
 - Uurloon, standby-tarief en overwerkmultipliers invullen.
 - Uren registreren voor normaal, 150% en 200% overwerk, plus standby.
 - Vergoedingen (belast/onbelast) en inhoudingen beheren.
-- Netto-indicatie met presets (35,82/37,48/49,50%) of een custom percentage.
+- Automatische berekening van belasting over overuren (50,33%).
 - CSV-download en print/PDF-export.
 - Autosave naar localStorage en reset naar defaults.
 
-> Netto is een indicatie op basis van een vlak tarief. Er worden geen loonheffingstabellen of pensioenregels toegepast.
+> Alleen overuren worden belast (50,33%). Standby en onbelaste vergoedingen blijven buiten de belastingberekening; overige inhoudingen voeg je handmatig toe.
 
 ## Snel starten
 Open `index.html` in je browser. Alle benodigde bestanden staan lokaal (geen build-stap nodig).
@@ -19,9 +19,8 @@ Open `index.html` in je browser. Alle benodigde bestanden staan lokaal (geen bui
 ## Gebruiksinstructies
 1. Vul de tarieven en uren in (optioneel kun je een uurloon invullen; dit bepaalt dan het basisloon en het overwerk).
 2. Voeg eventueel vergoedingen en inhoudingen toe via de tabellen.
-3. Kies een netto preset of vul een custom percentage in.
-4. Bekijk de resultaten in de kaarten “Betalingen”, “Inhoudingen” en “Totalen”.
-5. Gebruik de knoppen om te downloaden als CSV, te printen/PDF-en of te resetten.
+3. Bekijk de resultaten in de kaarten “Betalingen”, “Inhoudingen” en “Totalen”.
+4. Gebruik de knoppen om te downloaden als CSV, te printen/PDF-en of te resetten.
 
 ## GitHub Pages publiceren
 1. Commit de bestanden (`index.html`, `style.css`, `print.css`, `config.js`, `app.js`, `README.md`).
