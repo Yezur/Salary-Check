@@ -415,19 +415,22 @@ function recalc() {
 }
 
 function exportCSV(result) {
+  const exportState = { ...state, salary: { ...state.salary, monthly: 0 } };
+  const exportResult = calculate(exportState);
+  const exportEarnings = exportResult.earnings.filter((line) => line.label !== 'Maandsalaris');
   const rows = [
     ['label', 'type', 'amount'],
-    ...result.earnings.map((line) => [line.label, 'earning', line.amount.toFixed(2)]),
-    ...result.deductions.map((line) => [line.label, 'deduction', line.amount.toFixed(2)]),
-    ['Totaal betalingen', 'total', result.totals.earnings.toFixed(2)],
-    ['Totaal inhoudingen', 'total', result.totals.deductions.toFixed(2)],
-    ['Totaal bruto', 'total', result.totals.gross.toFixed(2)],
-    ['Belastbaar loon', 'total', result.totals.taxable.toFixed(2)],
-    ['Loonheffing (basis)', 'total', result.totals.base_tax.toFixed(2)],
-    ['Belasting overuren 50,33%', 'total', result.totals.overtime_tax.toFixed(2)],
-    ['Totaal loonheffing', 'total', result.totals.est_tax.toFixed(2)],
-    ['Netto indicatie', 'total', result.totals.net.toFixed(2)],
-    ['Onbelaste vergoedingen', 'info', result.totals.non_taxable.toFixed(2)],
+    ...exportEarnings.map((line) => [line.label, 'earning', line.amount.toFixed(2)]),
+    ...exportResult.deductions.map((line) => [line.label, 'deduction', line.amount.toFixed(2)]),
+    ['Totaal betalingen', 'total', exportResult.totals.earnings.toFixed(2)],
+    ['Totaal inhoudingen', 'total', exportResult.totals.deductions.toFixed(2)],
+    ['Totaal bruto', 'total', exportResult.totals.gross.toFixed(2)],
+    ['Belastbaar loon', 'total', exportResult.totals.taxable.toFixed(2)],
+    ['Loonheffing (basis)', 'total', exportResult.totals.base_tax.toFixed(2)],
+    ['Belasting overuren 50,33%', 'total', exportResult.totals.overtime_tax.toFixed(2)],
+    ['Totaal loonheffing', 'total', exportResult.totals.est_tax.toFixed(2)],
+    ['Netto indicatie', 'total', exportResult.totals.net.toFixed(2)],
+    ['Onbelaste vergoedingen', 'info', exportResult.totals.non_taxable.toFixed(2)],
     ['Timestamp', 'meta', new Date().toISOString()]
   ];
 
@@ -548,9 +551,9 @@ function attachEventListeners() {
 
 function runSelfTests() {
   const exampleState = {
-    salary: { monthly: 3200, hourly: 0 },
+    salary: { monthly: 0, hourly: 20 },
     rates: { standby: 2, mult150: 1.5, mult200: 2 },
-    hours: { normal: 160, ot150: 10, ot200: 5, standby: 8 },
+    hours: { normal: 0, ot150: 10, ot200: 5, standby: 8 },
     reimbursements: [
       { id: 'a', label: 'Reiskosten', amount: 50, taxable: false },
       { id: 'b', label: 'Bonus', amount: 100, taxable: true }
@@ -559,12 +562,13 @@ function runSelfTests() {
     tax: { mode: 'preset', presetId: DEFAULTS.taxPresetId }
   };
   const result = calculate(exampleState);
-  const expectedGross = 3200 + (10 * 20 * 1.5) + (5 * 20 * 2) + (8 * 2) + 150;
-  const expectedTaxable = 3200 + 100;
+  const expectedGross = (10 * 20 * 1.5) + (5 * 20 * 2) + (8 * 2) + 150;
+  const expectedTaxable = 100;
   const expectedTaxRate = TAX_PRESETS.find((p) => p.id === DEFAULTS.taxPresetId).rate;
   const expectedOvertimeTax = ((10 * 20 * 1.5) + (5 * 20 * 2)) * 0.5033;
   const expectedTax = (expectedTaxable * expectedTaxRate) + expectedOvertimeTax;
-  const expectedNet = expectedGross - expectedTax - 80;
+  const expectedDeductionsTotal = expectedTax + 80;
+  const expectedNet = expectedGross - expectedTax - expectedDeductionsTotal;
   const hourlyState = {
     salary: { monthly: 0, hourly: 20 },
     rates: { standby: 2, mult150: 1.5, mult200: 2 },
@@ -578,7 +582,8 @@ function runSelfTests() {
   const hourlyExpectedTaxable = 0;
   const hourlyExpectedOvertimeTax = ((6 * 20 * 1.5) + (4 * 20 * 2)) * 0.5033;
   const hourlyExpectedTax = (hourlyExpectedTaxable * expectedTaxRate) + hourlyExpectedOvertimeTax;
-  const hourlyExpectedNet = hourlyExpectedGross - hourlyExpectedTax;
+  const hourlyExpectedDeductionsTotal = hourlyExpectedTax;
+  const hourlyExpectedNet = hourlyExpectedGross - hourlyExpectedTax - hourlyExpectedDeductionsTotal;
   const allGood = Math.abs(result.totals.gross - expectedGross) < 0.001 &&
     Math.abs(result.totals.taxable - expectedTaxable) < 0.001 &&
     Math.abs(result.totals.net - expectedNet) < 0.001 &&
