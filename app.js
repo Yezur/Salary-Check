@@ -15,7 +15,6 @@ const state = {
   currency: 'EUR',
   workedDays: 0,
   salary: {
-    monthly: 0,
     hourly: DEFAULTS.hourlyRate
   },
   rates: {
@@ -86,9 +85,8 @@ function mergeState(saved) {
     state.workedDays = Math.max(0, saved.workedDays);
   }
   if (saved.salary && typeof saved.salary === 'object') {
-    state.salary = { ...state.salary, ...saved.salary };
+    state.salary.hourly = parseNumber(saved.salary.hourly ?? state.salary.hourly);
   }
-  state.salary.monthly = Math.max(0, parseNumber(state.salary.monthly));
   state.salary.hourly = Math.max(0, parseNumber(state.salary.hourly));
   state.rates = { ...state.rates, ...(saved.rates || {}) };
   state.hours = { ...state.hours, ...(saved.hours || {}) };
@@ -141,15 +139,13 @@ function calculateEstimatedTax(currentState, taxableWage) {
 }
 
 function calculate(currentState) {
-  const monthlySalary = parseNumber(currentState.salary?.monthly);
   const hourlyRate = parseNumber(currentState.salary?.hourly);
   const baseHourly = hourlyRate;
-  const basePay = monthlySalary;
   const ot150Pay = currentState.hours.ot150 * baseHourly * currentState.rates.mult150;
   const ot200Pay = currentState.hours.ot200 * baseHourly * currentState.rates.mult200;
   const standbyPay = currentState.hours.standby * currentState.rates.standby;
   const reimbursementsTotal = currentState.reimbursements.reduce((sum, item) => sum + item.amount, 0);
-  const wageBase = basePay + ot150Pay + ot200Pay + standbyPay;
+  const wageBase = ot150Pay + ot200Pay + standbyPay;
 
   const taxableReimbursements = currentState.reimbursements
     .filter((item) => item.taxable)
@@ -160,17 +156,14 @@ function calculate(currentState) {
     .filter((item) => item.taxable)
     .reduce((sum, item) => sum + item.amount, 0);
 
-  const overtimePay = ot150Pay + ot200Pay;
-  const baseWage = basePay + ot150Pay + ot200Pay + standbyPay;
-  const grossTotal = basePay + ot150Pay + ot200Pay + standbyPay + reimbursementsTotal;
-  const baseTaxableWage = basePay + taxableReimbursements;
+  const grossTotal = wageBase + reimbursementsTotal;
+  const baseTaxableWage = taxableReimbursements;
   const taxableWage = Math.max(0, baseTaxableWage - taxableDeductions);
   const baseTax = calculateEstimatedTax(currentState, taxableWage);
-  const overtimeTax = (ot150Pay + ot200Pay) * 0.5033;
+  const overtimeTax = (ot150Pay + ot200Pay) * OVERTIME_TAX_RATE;
   const estimatedTax = baseTax + overtimeTax;
   const net = grossTotal - estimatedTax - deductionsTotal;
   const earnings = [
-      { label: 'Maandsalaris', amount: basePay },
       { label: 'Overwerk 150%', amount: ot150Pay },
       { label: 'Overwerk 200%', amount: ot200Pay },
       { label: 'Standby', amount: standbyPay },
@@ -311,7 +304,6 @@ function readTablesIntoState() {
 }
 
 function readFormIntoState() {
-  state.salary.monthly = Math.max(0, parseNumber(document.getElementById('salaryMonthly').value));
   state.salary.hourly = Math.max(0, parseNumber(document.getElementById('hourlyRate').value));
   state.rates.standby = Math.max(0, parseNumber(document.getElementById('standbyRate').value));
   state.rates.mult150 = clamp(parseNumber(document.getElementById('mult150').value) || DEFAULTS.mult150, 1, 5);
@@ -453,7 +445,6 @@ function printPdf() {
 function resetAll() {
   localStorage.removeItem(STORAGE_KEY);
   state.salary = {
-    monthly: 0,
     hourly: DEFAULTS.hourlyRate
   };
   state.rates = {
@@ -475,7 +466,6 @@ function resetAll() {
 }
 
 function hydrateForm() {
-  document.getElementById('salaryMonthly').value = state.salary.monthly;
   document.getElementById('hourlyRate').value = state.salary.hourly;
   document.getElementById('standbyRate').value = state.rates.standby;
   document.getElementById('mult150').value = state.rates.mult150;
@@ -503,7 +493,7 @@ function populateTaxPresets() {
 }
 
 function attachEventListeners() {
-  document.querySelectorAll('#salaryMonthly, #hourlyRate, #standbyRate, #mult150, #mult200, #workedDays, #hNormal, #h150, #h200, #hStandby').forEach((el) => {
+  document.querySelectorAll('#hourlyRate, #standbyRate, #mult150, #mult200, #workedDays, #hNormal, #h150, #h200, #hStandby').forEach((el) => {
     el.addEventListener('input', recalc);
     el.addEventListener('change', recalc);
   });
@@ -548,7 +538,7 @@ function attachEventListeners() {
 
 function runSelfTests() {
   const exampleState = {
-    salary: { monthly: 3200, hourly: 0 },
+    salary: { hourly: 20 },
     rates: { standby: 2, mult150: 1.5, mult200: 2 },
     hours: { normal: 160, ot150: 10, ot200: 5, standby: 8 },
     reimbursements: [
@@ -559,14 +549,14 @@ function runSelfTests() {
     tax: { mode: 'preset', presetId: DEFAULTS.taxPresetId }
   };
   const result = calculate(exampleState);
-  const expectedGross = 3200 + (10 * 20 * 1.5) + (5 * 20 * 2) + (8 * 2) + 150;
-  const expectedTaxable = 3200 + 100;
+  const expectedGross = (10 * 20 * 1.5) + (5 * 20 * 2) + (8 * 2) + 150;
+  const expectedTaxable = 100;
   const expectedTaxRate = TAX_PRESETS.find((p) => p.id === DEFAULTS.taxPresetId).rate;
-  const expectedOvertimeTax = ((10 * 20 * 1.5) + (5 * 20 * 2)) * 0.5033;
+  const expectedOvertimeTax = ((10 * 20 * 1.5) + (5 * 20 * 2)) * OVERTIME_TAX_RATE;
   const expectedTax = (expectedTaxable * expectedTaxRate) + expectedOvertimeTax;
   const expectedNet = expectedGross - expectedTax - 80;
   const hourlyState = {
-    salary: { monthly: 0, hourly: 20 },
+    salary: { hourly: 20 },
     rates: { standby: 2, mult150: 1.5, mult200: 2 },
     hours: { normal: 150, ot150: 6, ot200: 4, standby: 3 },
     reimbursements: [],
@@ -576,7 +566,7 @@ function runSelfTests() {
   const hourlyResult = calculate(hourlyState);
   const hourlyExpectedGross = (6 * 20 * 1.5) + (4 * 20 * 2) + (3 * 2);
   const hourlyExpectedTaxable = 0;
-  const hourlyExpectedOvertimeTax = ((6 * 20 * 1.5) + (4 * 20 * 2)) * 0.5033;
+  const hourlyExpectedOvertimeTax = ((6 * 20 * 1.5) + (4 * 20 * 2)) * OVERTIME_TAX_RATE;
   const hourlyExpectedTax = (hourlyExpectedTaxable * expectedTaxRate) + hourlyExpectedOvertimeTax;
   const hourlyExpectedNet = hourlyExpectedGross - hourlyExpectedTax;
   const allGood = Math.abs(result.totals.gross - expectedGross) < 0.001 &&
