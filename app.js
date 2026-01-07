@@ -120,6 +120,14 @@ function formatCurrency(amount) {
   return currencyFormatter.format(amount);
 }
 
+const hoursFormatter = new Intl.NumberFormat('nl-NL', {
+  maximumFractionDigits: 1
+});
+
+function formatHours(value) {
+  return hoursFormatter.format(value);
+}
+
 function calculateEstimatedTax(currentState, taxableWage) {
   const tax = currentState.tax ?? {};
   const mode = tax.mode === 'custom' ? 'custom' : 'preset';
@@ -220,9 +228,19 @@ function renderTotals(totals) {
   document.getElementById('totalsDeductions').textContent = formatCurrency(totals.deductions);
   document.getElementById('totalsGross').textContent = formatCurrency(totals.gross);
   document.getElementById('totalsTaxable').textContent = formatCurrency(totals.taxable);
+  document.getElementById('totalsBaseTax').textContent = formatCurrency(totals.base_tax);
+  document.getElementById('totalsOvertimeTax').textContent = formatCurrency(totals.overtime_tax);
   document.getElementById('totalsTax').textContent = formatCurrency(totals.est_tax);
   document.getElementById('totalsNet').textContent = formatCurrency(totals.net);
   document.getElementById('totalsNonTaxable').textContent = formatCurrency(totals.non_taxable);
+}
+
+function renderHoursSummary(hours, workedDays) {
+  document.getElementById('summaryWorkedDays').textContent = formatHours(workedDays);
+  document.getElementById('summaryNormalHours').textContent = formatHours(hours.normal);
+  document.getElementById('summaryOvertime150').textContent = formatHours(hours.ot150);
+  document.getElementById('summaryOvertime200').textContent = formatHours(hours.ot200);
+  document.getElementById('summaryStandbyHours').textContent = formatHours(hours.standby);
 }
 
 function renderReimbursementsTable(items) {
@@ -347,6 +365,7 @@ function render(result, options = {}) {
   renderEarnings(result.earnings);
   renderDeductions(result.deductions);
   renderTotals(result.totals);
+  renderHoursSummary(state.hours, state.workedDays);
   if (!skipReimbursementsTable) {
     renderReimbursementsTable(state.reimbursements);
   }

@@ -139,6 +139,7 @@ button.ghost {
   gap: 0.6rem;
 }
 .calc-steps li strong { display: inline-block; margin-bottom: 0.1rem; }
+.print-only { display: none; }
 
 @media (max-width: 720px) {
   body { padding: 1rem; }
