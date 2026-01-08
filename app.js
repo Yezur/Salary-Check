@@ -148,7 +148,8 @@ function calculate(currentState) {
 
   const grossTotal = wageBase + reimbursementsTotal;
   const taxableWage = Math.max(0, taxableReimbursements - taxableDeductions);
-  const overtimeTax = (ot150Pay + ot200Pay) * OVERTIME_TAX_RATE;
+  const taxableBase = Math.max(0, (ot150Pay + ot200Pay) + taxableReimbursements - taxableDeductions);
+  const overtimeTax = taxableBase * OVERTIME_TAX_RATE;
   const earnings = [
       { label: 'Overwerk 150%', amount: ot150Pay },
       { label: 'Overwerk 200%', amount: ot200Pay },
@@ -484,7 +485,7 @@ function runSelfTests() {
   const result = calculate(exampleState);
   const expectedGross = (10 * 20 * 1.5) + (5 * 20 * 2) + (8 * 2) + 150;
   const expectedTaxable = 100;
-  const expectedOvertimeTax = ((10 * 20 * 1.5) + (5 * 20 * 2)) * OVERTIME_TAX_RATE;
+  const expectedOvertimeTax = ((10 * 20 * 1.5) + (5 * 20 * 2) + 100) * OVERTIME_TAX_RATE;
   const expectedDeductionsTotal = expectedOvertimeTax + 80;
   const expectedNet = expectedGross - expectedDeductionsTotal;
   const hourlyState = {
