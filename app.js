@@ -216,6 +216,7 @@ function renderTotals(totals) {
   dom.totalsDeductions.textContent = formatCurrency(totals.deductions);
   dom.totalsGross.textContent = formatCurrency(totals.gross);
   dom.totalsNet.textContent = formatCurrency(totals.net);
+  dom.totalsOvertimeTax.textContent = formatCurrency(totals.overtime_tax);
   dom.totalsNonTaxable.textContent = formatCurrency(totals.non_taxable);
 }
 
@@ -535,6 +536,7 @@ function init() {
   dom.totalsDeductions = document.getElementById('totalsDeductions');
   dom.totalsGross = document.getElementById('totalsGross');
   dom.totalsNet = document.getElementById('totalsNet');
+  dom.totalsOvertimeTax = document.getElementById('totalsOvertimeTax');
   dom.totalsNonTaxable = document.getElementById('totalsNonTaxable');
   dom.summaryWorkedDays = document.getElementById('summaryWorkedDays');
   dom.summaryNormalHours = document.getElementById('summaryNormalHours');
