@@ -34,6 +34,7 @@ const state = {
 
 let saveTimer = null;
 let latestResult = null;
+const dom = {};
 
 function parseNumber(value) {
   if (value === undefined || value === null) return 0;
@@ -136,29 +137,35 @@ function calculate(currentState) {
   const ot150Pay = currentState.hours.ot150 * baseHourly * currentState.rates.mult150;
   const ot200Pay = currentState.hours.ot200 * baseHourly * currentState.rates.mult200;
   const standbyPay = currentState.hours.standby * currentState.rates.standby;
-  const reimbursementsTotal = currentState.reimbursements.reduce((sum, item) => sum + item.amount, 0);
-  const wageBase = ot150Pay + ot200Pay + standbyPay;
+  let reimbursementsTotal = 0;
+  let taxableReimbursements = 0;
+  currentState.reimbursements.forEach((item) => {
+    reimbursementsTotal += item.amount;
+    taxableReimbursements += item.amount * (parseNumber(item.taxableRate) / 100);
+  });
+  let deductionsTotal = 0;
+  let taxableDeductions = 0;
+  currentState.deductions.forEach((item) => {
+    deductionsTotal += item.amount;
+    taxableDeductions += item.amount * (parseNumber(item.taxableRate) / 100);
+  });
 
-  const taxableReimbursements = currentState.reimbursements
-    .reduce((sum, item) => sum + (item.amount * (parseNumber(item.taxableRate) / 100)), 0);
+  const wageBase = ot150Pay + ot200Pay + standbyPay;
   const nonTaxableReimbursements = reimbursementsTotal - taxableReimbursements;
-  const deductionsTotal = currentState.deductions.reduce((sum, item) => sum + item.amount, 0);
-  const taxableDeductions = currentState.deductions
-    .reduce((sum, item) => sum + (item.amount * (parseNumber(item.taxableRate) / 100)), 0);
 
   const grossTotal = wageBase + reimbursementsTotal;
   const taxableWage = Math.max(0, taxableReimbursements - taxableDeductions);
   const overtimeTax = (ot150Pay + ot200Pay) * OVERTIME_TAX_RATE;
   const earnings = [
-      { label: 'Overwerk 150%', amount: ot150Pay },
-      { label: 'Overwerk 200%', amount: ot200Pay },
-      { label: 'Standby', amount: standbyPay },
-      { label: 'Vergoedingen', amount: reimbursementsTotal }
-    ];
+    { label: 'Overwerk 150%', amount: ot150Pay },
+    { label: 'Overwerk 200%', amount: ot200Pay },
+    { label: 'Standby', amount: standbyPay },
+    { label: 'Vergoedingen', amount: reimbursementsTotal }
+  ];
   const deductions = [
-      { label: 'Belasting overuren 50,33%', amount: overtimeTax },
-      ...currentState.deductions.map((d) => ({ label: d.label, amount: d.amount }))
-    ];
+    { label: 'Belasting overuren 50,33%', amount: overtimeTax },
+    ...currentState.deductions.map((d) => ({ label: d.label, amount: d.amount }))
+  ];
   const totalEarnings = wageBase;
   const totalDeductions = deductions.reduce((sum, line) => sum + line.amount, 0);
   const netTotal = grossTotal - totalDeductions;
@@ -180,105 +187,95 @@ function calculate(currentState) {
 }
 
 function renderEarnings(lines) {
-  const container = document.getElementById('earningsLines');
-  container.innerHTML = '';
+  dom.earningsLines.innerHTML = '';
+  const fragment = document.createDocumentFragment();
   lines.forEach((line) => {
     const row = document.createElement('div');
     row.className = 'line';
     row.innerHTML = `<span>${line.label}</span><strong>${formatCurrency(line.amount)}</strong>`;
-    container.appendChild(row);
+    fragment.appendChild(row);
   });
+  dom.earningsLines.appendChild(fragment);
 }
 
 function renderDeductions(lines) {
-  const container = document.getElementById('deductionLines');
-  container.innerHTML = '';
+  dom.deductionLines.innerHTML = '';
+  const fragment = document.createDocumentFragment();
   lines.forEach((line) => {
     const row = document.createElement('div');
     row.className = 'line';
     row.innerHTML = `<span>${line.label}</span><strong>${formatCurrency(line.amount)}</strong>`;
-    container.appendChild(row);
+    fragment.appendChild(row);
   });
+  dom.deductionLines.appendChild(fragment);
 }
 
 function renderTotals(totals) {
-  document.getElementById('totalsEarnings').textContent = formatCurrency(totals.earnings);
-  document.getElementById('totalsReimbursements').textContent = formatCurrency(totals.reimbursements);
-  document.getElementById('totalsDeductions').textContent = formatCurrency(totals.deductions);
-  document.getElementById('totalsGross').textContent = formatCurrency(totals.gross);
-  document.getElementById('totalsNet').textContent = formatCurrency(totals.net);
-  document.getElementById('totalsOvertimeTax').textContent = formatCurrency(totals.overtime_tax);
-  document.getElementById('totalsNonTaxable').textContent = formatCurrency(totals.non_taxable);
+  dom.totalsEarnings.textContent = formatCurrency(totals.earnings);
+  dom.totalsReimbursements.textContent = formatCurrency(totals.reimbursements);
+  dom.totalsDeductions.textContent = formatCurrency(totals.deductions);
+  dom.totalsGross.textContent = formatCurrency(totals.gross);
+  dom.totalsNet.textContent = formatCurrency(totals.net);
+  dom.totalsOvertimeTax.textContent = formatCurrency(totals.overtime_tax);
+  dom.totalsNonTaxable.textContent = formatCurrency(totals.non_taxable);
 }
 
 function renderHoursSummary(hours, workedDays) {
-  document.getElementById('summaryWorkedDays').textContent = formatHours(workedDays);
-  document.getElementById('summaryNormalHours').textContent = formatHours(hours.normal);
-  document.getElementById('summaryOvertime150').textContent = formatHours(hours.ot150);
-  document.getElementById('summaryOvertime200').textContent = formatHours(hours.ot200);
-  document.getElementById('summaryStandbyHours').textContent = formatHours(hours.standby);
+  dom.summaryWorkedDays.textContent = formatHours(workedDays);
+  dom.summaryNormalHours.textContent = formatHours(hours.normal);
+  dom.summaryOvertime150.textContent = formatHours(hours.ot150);
+  dom.summaryOvertime200.textContent = formatHours(hours.ot200);
+  dom.summaryStandbyHours.textContent = formatHours(hours.standby);
+}
+
+function renderTable(body, items) {
+  body.innerHTML = '';
+  const fragment = document.createDocumentFragment();
+  items.forEach((item) => {
+    const row = document.createElement('tr');
+    row.dataset.id = item.id;
+    row.innerHTML = `
+      <td><input type="text" value="${item.label}" data-field="label" aria-label="Label" /></td>
+      <td><input type="number" step="0.01" value="${item.amount}" data-field="amount" aria-label="Bedrag" /></td>
+      <td><input type="number" min="0" max="100" step="0.1" value="${item.taxableRate ?? 0}" data-field="taxableRate" aria-label="Belastbaar percentage" /></td>
+      <td class="actions"><button type="button" class="ghost" data-action="remove">✕</button></td>
+    `;
+    fragment.appendChild(row);
+  });
+  body.appendChild(fragment);
 }
 
 function renderReimbursementsTable(items) {
-  const body = document.getElementById('reimbursementsTableBody');
-  body.innerHTML = '';
-  items.forEach((item) => {
-    const row = document.createElement('tr');
-    row.dataset.id = item.id;
-    row.innerHTML = `
-      <td><input type="text" value="${item.label}" data-field="label" aria-label="Label" /></td>
-      <td><input type="number" step="0.01" value="${item.amount}" data-field="amount" aria-label="Bedrag" /></td>
-      <td><input type="number" min="0" max="100" step="0.1" value="${item.taxableRate ?? 0}" data-field="taxableRate" aria-label="Belastbaar percentage" /></td>
-      <td class="actions"><button type="button" class="ghost" data-action="remove">✕</button></td>
-    `;
-    body.appendChild(row);
-  });
+  renderTable(dom.reimbursementsTableBody, items);
 }
 
 function renderDeductionsTable(items) {
-  const body = document.getElementById('deductionsTableBody');
-  body.innerHTML = '';
-  items.forEach((item) => {
-    const row = document.createElement('tr');
-    row.dataset.id = item.id;
-    row.innerHTML = `
-      <td><input type="text" value="${item.label}" data-field="label" aria-label="Label" /></td>
-      <td><input type="number" step="0.01" value="${item.amount}" data-field="amount" aria-label="Bedrag" /></td>
-      <td><input type="number" min="0" max="100" step="0.1" value="${item.taxableRate ?? 0}" data-field="taxableRate" aria-label="Belastbaar percentage" /></td>
-      <td class="actions"><button type="button" class="ghost" data-action="remove">✕</button></td>
-    `;
-    body.appendChild(row);
+  renderTable(dom.deductionsTableBody, items);
+}
+
+function readTableIntoState(body, fallbackLabel) {
+  return Array.from(body.querySelectorAll('tr')).map((row) => {
+    const id = row.dataset.id || getId();
+    const label = row.querySelector('[data-field="label"]').value || fallbackLabel;
+    const amount = parseNumber(row.querySelector('[data-field="amount"]').value);
+    const taxableRate = clamp(parseNumber(row.querySelector('[data-field="taxableRate"]').value), 0, 100);
+    return { id, label, amount, taxableRate };
   });
 }
 
 function readTablesIntoState() {
-  const reimbRows = document.querySelectorAll('#reimbursementsTableBody tr');
-  state.reimbursements = Array.from(reimbRows).map((row) => {
-    const id = row.dataset.id || getId();
-    const label = row.querySelector('[data-field="label"]').value || 'Vergoeding';
-    const amount = parseNumber(row.querySelector('[data-field="amount"]').value);
-    const taxableRate = clamp(parseNumber(row.querySelector('[data-field="taxableRate"]').value), 0, 100);
-    return { id, label, amount, taxableRate };
-  });
-
-  const deductRows = document.querySelectorAll('#deductionsTableBody tr');
-  state.deductions = Array.from(deductRows).map((row) => {
-    const id = row.dataset.id || getId();
-    const label = row.querySelector('[data-field="label"]').value || 'Inhouding';
-    const amount = parseNumber(row.querySelector('[data-field="amount"]').value);
-    const taxableRate = clamp(parseNumber(row.querySelector('[data-field="taxableRate"]').value), 0, 100);
-    return { id, label, amount, taxableRate };
-  });
+  state.reimbursements = readTableIntoState(dom.reimbursementsTableBody, 'Vergoeding');
+  state.deductions = readTableIntoState(dom.deductionsTableBody, 'Inhouding');
 }
 
 function readFormIntoState() {
-  state.salary.hourly = Math.max(0, parseNumber(document.getElementById('hourlyRate').value));
-  state.rates.standby = Math.max(0, parseNumber(document.getElementById('standbyRate').value));
-  state.rates.mult150 = clamp(parseNumber(document.getElementById('mult150').value) || DEFAULTS.mult150, 1, 5);
-  state.rates.mult200 = clamp(parseNumber(document.getElementById('mult200').value) || DEFAULTS.mult200, 1, 5);
+  state.salary.hourly = Math.max(0, parseNumber(dom.hourlyRate.value));
+  state.rates.standby = Math.max(0, parseNumber(dom.standbyRate.value));
+  state.rates.mult150 = clamp(parseNumber(dom.mult150.value) || DEFAULTS.mult150, 1, 5);
+  state.rates.mult200 = clamp(parseNumber(dom.mult200.value) || DEFAULTS.mult200, 1, 5);
 
-  const normalHoursInput = document.getElementById('hNormal');
-  const workedDaysInput = document.getElementById('workedDays');
+  const normalHoursInput = dom.hNormal;
+  const workedDaysInput = dom.workedDays;
 
   if (normalHoursInput && workedDaysInput) {
     const workedDaysRaw = workedDaysInput.value;
@@ -293,19 +290,18 @@ function readFormIntoState() {
       state.hours.normal = manualNormalHours;
     }
   }
-  state.hours.ot150 = Math.max(0, parseNumber(document.getElementById('h150').value));
-  state.hours.ot200 = Math.max(0, parseNumber(document.getElementById('h200').value));
-  state.hours.standby = Math.max(0, parseNumber(document.getElementById('hStandby').value));
+  state.hours.ot150 = Math.max(0, parseNumber(dom.h150.value));
+  state.hours.ot200 = Math.max(0, parseNumber(dom.h200.value));
+  state.hours.standby = Math.max(0, parseNumber(dom.hStandby.value));
 
   readTablesIntoState();
   toggleHoursWarning();
 }
 
 function toggleHoursWarning() {
-  const warning = document.getElementById('hoursWarning');
   const totalHours = state.hours.normal + state.hours.ot150 + state.hours.ot200 + state.hours.standby;
   const show = totalHours > LIMITS.hoursSoftMax;
-  warning.hidden = !show;
+  dom.hoursWarning.hidden = !show;
 }
 
 function render(result, options = {}) {
@@ -337,7 +333,7 @@ function addDeduction() {
   renderDeductionsTable(state.deductions);
 }
 
-function removeRow(event, tableSelector, collectionKey) {
+function removeRow(event, collectionKey) {
   const btn = event.target.closest('[data-action="remove"]');
   if (!btn) return false;
   const row = btn.closest('tr');
@@ -351,10 +347,8 @@ function removeRow(event, tableSelector, collectionKey) {
 
 function recalc() {
   const activeElement = document.activeElement;
-  const reimbursementsBody = document.getElementById('reimbursementsTableBody');
-  const deductionsBody = document.getElementById('deductionsTableBody');
-  const skipReimbursementsTable = reimbursementsBody?.contains(activeElement) ?? false;
-  const skipDeductionsTable = deductionsBody?.contains(activeElement) ?? false;
+  const skipReimbursementsTable = dom.reimbursementsTableBody?.contains(activeElement) ?? false;
+  const skipDeductionsTable = dom.deductionsTableBody?.contains(activeElement) ?? false;
   readFormIntoState();
   latestResult = calculate(state);
   render(latestResult, { skipReimbursementsTable, skipDeductionsTable });
@@ -394,7 +388,7 @@ function exportCSV(result) {
 }
 
 function printPdf() {
-  document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+  dom.results.scrollIntoView({ behavior: 'smooth' });
   setTimeout(() => window.print(), 200);
 }
 
@@ -417,17 +411,17 @@ function resetAll() {
 }
 
 function hydrateForm() {
-  document.getElementById('hourlyRate').value = state.salary.hourly;
-  document.getElementById('standbyRate').value = state.rates.standby;
-  document.getElementById('mult150').value = state.rates.mult150;
-  document.getElementById('mult200').value = state.rates.mult200;
-  document.getElementById('workedDays').value = state.workedDays;
+  dom.hourlyRate.value = state.salary.hourly;
+  dom.standbyRate.value = state.rates.standby;
+  dom.mult150.value = state.rates.mult150;
+  dom.mult200.value = state.rates.mult200;
+  dom.workedDays.value = state.workedDays;
   const normalHours = state.workedDays > 0 ? state.workedDays * HOURS_PER_DAY : state.hours.normal;
   state.hours.normal = normalHours;
-  document.getElementById('hNormal').value = normalHours;
-  document.getElementById('h150').value = state.hours.ot150;
-  document.getElementById('h200').value = state.hours.ot200;
-  document.getElementById('hStandby').value = state.hours.standby;
+  dom.hNormal.value = normalHours;
+  dom.h150.value = state.hours.ot150;
+  dom.h200.value = state.hours.ot200;
+  dom.hStandby.value = state.hours.standby;
   renderReimbursementsTable(state.reimbursements);
   renderDeductionsTable(state.deductions);
 }
@@ -438,36 +432,36 @@ function attachEventListeners() {
     el.addEventListener('change', recalc);
   });
 
-  document.getElementById('addReimbursement').addEventListener('click', () => {
+  dom.addReimbursement.addEventListener('click', () => {
     addReimbursement();
     recalc();
   });
-  document.getElementById('addDeduction').addEventListener('click', () => {
+  dom.addDeduction.addEventListener('click', () => {
     addDeduction();
     recalc();
   });
 
-  document.getElementById('reimbursementsTableBody').addEventListener('input', recalc);
-  document.getElementById('deductionsTableBody').addEventListener('input', recalc);
-  document.getElementById('reimbursementsTableBody').addEventListener('change', recalc);
-  document.getElementById('deductionsTableBody').addEventListener('change', recalc);
+  dom.reimbursementsTableBody.addEventListener('input', recalc);
+  dom.deductionsTableBody.addEventListener('input', recalc);
+  dom.reimbursementsTableBody.addEventListener('change', recalc);
+  dom.deductionsTableBody.addEventListener('change', recalc);
 
-  document.getElementById('reimbursementsTableBody').addEventListener('click', (e) => {
-    if (removeRow(e, '#reimbursementsTableBody', 'reimbursements')) return;
+  dom.reimbursementsTableBody.addEventListener('click', (e) => {
+    if (removeRow(e, 'reimbursements')) return;
   });
-  document.getElementById('deductionsTableBody').addEventListener('click', (e) => {
-    if (removeRow(e, '#deductionsTableBody', 'deductions')) return;
+  dom.deductionsTableBody.addEventListener('click', (e) => {
+    if (removeRow(e, 'deductions')) return;
   });
 
-  document.getElementById('downloadCsv').addEventListener('click', () => {
+  dom.downloadCsv.addEventListener('click', () => {
     recalc();
     if (latestResult) exportCSV(latestResult);
   });
-  document.getElementById('printPdf').addEventListener('click', () => {
+  dom.printPdf.addEventListener('click', () => {
     recalc();
     printPdf();
   });
-  document.getElementById('resetForm').addEventListener('click', resetAll);
+  dom.resetForm.addEventListener('click', resetAll);
 }
 
 function runSelfTests() {
@@ -518,6 +512,38 @@ function runSelfTests() {
 }
 
 function init() {
+  dom.hourlyRate = document.getElementById('hourlyRate');
+  dom.standbyRate = document.getElementById('standbyRate');
+  dom.mult150 = document.getElementById('mult150');
+  dom.mult200 = document.getElementById('mult200');
+  dom.workedDays = document.getElementById('workedDays');
+  dom.hNormal = document.getElementById('hNormal');
+  dom.h150 = document.getElementById('h150');
+  dom.h200 = document.getElementById('h200');
+  dom.hStandby = document.getElementById('hStandby');
+  dom.reimbursementsTableBody = document.getElementById('reimbursementsTableBody');
+  dom.deductionsTableBody = document.getElementById('deductionsTableBody');
+  dom.addReimbursement = document.getElementById('addReimbursement');
+  dom.addDeduction = document.getElementById('addDeduction');
+  dom.downloadCsv = document.getElementById('downloadCsv');
+  dom.printPdf = document.getElementById('printPdf');
+  dom.resetForm = document.getElementById('resetForm');
+  dom.results = document.getElementById('results');
+  dom.earningsLines = document.getElementById('earningsLines');
+  dom.deductionLines = document.getElementById('deductionLines');
+  dom.totalsEarnings = document.getElementById('totalsEarnings');
+  dom.totalsReimbursements = document.getElementById('totalsReimbursements');
+  dom.totalsDeductions = document.getElementById('totalsDeductions');
+  dom.totalsGross = document.getElementById('totalsGross');
+  dom.totalsNet = document.getElementById('totalsNet');
+  dom.totalsOvertimeTax = document.getElementById('totalsOvertimeTax');
+  dom.totalsNonTaxable = document.getElementById('totalsNonTaxable');
+  dom.summaryWorkedDays = document.getElementById('summaryWorkedDays');
+  dom.summaryNormalHours = document.getElementById('summaryNormalHours');
+  dom.summaryOvertime150 = document.getElementById('summaryOvertime150');
+  dom.summaryOvertime200 = document.getElementById('summaryOvertime200');
+  dom.summaryStandbyHours = document.getElementById('summaryStandbyHours');
+  dom.hoursWarning = document.getElementById('hoursWarning');
   loadFromStorage();
   resetTransientState();
   hydrateForm();
