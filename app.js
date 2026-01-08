@@ -69,6 +69,11 @@ function loadFromStorage() {
     if (!raw) return;
     const stored = JSON.parse(raw);
     mergeState(stored);
+    const legacyKeys = ['workedDays', 'salary', 'hours', 'reimbursements', 'deductions'];
+    const hasLegacyPayload = legacyKeys.some((key) => key in stored);
+    if (hasLegacyPayload) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState()));
+    }
   } catch (err) {
     console.warn('Kon localStorage niet lezen', err);
   }
@@ -76,29 +81,41 @@ function loadFromStorage() {
 
 function mergeState(saved) {
   if (!saved || typeof saved !== 'object') return;
-  if (typeof saved.workedDays === 'number') {
-    state.workedDays = Math.max(0, saved.workedDays);
-  }
-  if (saved.salary && typeof saved.salary === 'object') {
-    state.salary.hourly = parseNumber(saved.salary.hourly ?? state.salary.hourly);
-  }
-  state.salary.hourly = Math.max(0, parseNumber(state.salary.hourly));
-  state.rates = { ...state.rates, ...(saved.rates || {}) };
-  state.hours = { ...state.hours, ...(saved.hours || {}) };
-  state.reimbursements = Array.isArray(saved.reimbursements)
-    ? saved.reimbursements.map((item) => normalizeReimbursement(item))
-    : state.reimbursements;
-  state.deductions = Array.isArray(saved.deductions) ? normalizeDeductions(saved.deductions) : state.deductions;
-  if (state.workedDays > 0) {
-    state.hours.normal = state.workedDays * HOURS_PER_DAY;
-  }
+  state.rates = sanitizeRates(saved.rates);
 }
 
 function scheduleSave() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(getPersistedState()));
   }, SAVE_DEBOUNCE_MS);
+}
+
+function sanitizeRates(rates) {
+  const safeRates = { ...state.rates };
+  if (!rates || typeof rates !== 'object') return safeRates;
+  if ('standby' in rates) {
+    safeRates.standby = Math.max(0, parseNumber(rates.standby));
+  }
+  if ('mult150' in rates) {
+    safeRates.mult150 = clamp(parseNumber(rates.mult150) || DEFAULTS.mult150, 1, 5);
+  }
+  if ('mult200' in rates) {
+    safeRates.mult200 = clamp(parseNumber(rates.mult200) || DEFAULTS.mult200, 1, 5);
+  }
+  return safeRates;
+}
+
+function getPersistedState() {
+  return {
+    rates: sanitizeRates(state.rates)
+  };
+}
+
+function resetTransientState() {
+  state.salary.hourly = DEFAULTS.hourlyRate;
+  state.workedDays = 0;
+  state.hours = { normal: 0, ot150: 0, ot200: 0, standby: 0 };
 }
 
 function formatCurrency(amount) {
@@ -504,6 +521,7 @@ function runSelfTests() {
 
 function init() {
   loadFromStorage();
+  resetTransientState();
   hydrateForm();
   attachEventListeners();
   recalc();
