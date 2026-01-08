@@ -59,7 +59,7 @@ function normalizeDeductions(items) {
     id: item.id || getId(),
     label: item.label || 'Inhouding',
     amount: parseNumber(item.amount),
-    taxable: Boolean(item.taxable)
+    taxableRate: clamp(parseNumber(item.taxableRate), 0, 100)
   }));
 }
 
@@ -140,13 +140,11 @@ function calculate(currentState) {
   const wageBase = ot150Pay + ot200Pay + standbyPay;
 
   const taxableReimbursements = currentState.reimbursements
-    .filter((item) => item.taxable)
-    .reduce((sum, item) => sum + item.amount, 0);
+    .reduce((sum, item) => sum + (item.amount * (parseNumber(item.taxableRate) / 100)), 0);
   const nonTaxableReimbursements = reimbursementsTotal - taxableReimbursements;
   const deductionsTotal = currentState.deductions.reduce((sum, item) => sum + item.amount, 0);
   const taxableDeductions = currentState.deductions
-    .filter((item) => item.taxable)
-    .reduce((sum, item) => sum + item.amount, 0);
+    .reduce((sum, item) => sum + (item.amount * (parseNumber(item.taxableRate) / 100)), 0);
 
   const grossTotal = wageBase + reimbursementsTotal;
   const taxableWage = Math.max(0, taxableReimbursements - taxableDeductions);
@@ -230,7 +228,7 @@ function renderReimbursementsTable(items) {
     row.innerHTML = `
       <td><input type="text" value="${item.label}" data-field="label" aria-label="Label" /></td>
       <td><input type="number" step="0.01" value="${item.amount}" data-field="amount" aria-label="Bedrag" /></td>
-      <td style="text-align:center"><input type="checkbox" data-field="taxable" ${item.taxable ? 'checked' : ''} aria-label="Belastbaar" /></td>
+      <td><input type="number" min="0" max="100" step="0.1" value="${item.taxableRate ?? 0}" data-field="taxableRate" aria-label="Belastbaar percentage" /></td>
       <td class="actions"><button type="button" class="ghost" data-action="remove">✕</button></td>
     `;
     body.appendChild(row);
@@ -246,7 +244,7 @@ function renderDeductionsTable(items) {
     row.innerHTML = `
       <td><input type="text" value="${item.label}" data-field="label" aria-label="Label" /></td>
       <td><input type="number" step="0.01" value="${item.amount}" data-field="amount" aria-label="Bedrag" /></td>
-      <td style="text-align:center"><input type="checkbox" data-field="taxable" ${item.taxable ? 'checked' : ''} aria-label="Belastbaar" /></td>
+      <td><input type="number" min="0" max="100" step="0.1" value="${item.taxableRate ?? 0}" data-field="taxableRate" aria-label="Belastbaar percentage" /></td>
       <td class="actions"><button type="button" class="ghost" data-action="remove">✕</button></td>
     `;
     body.appendChild(row);
@@ -259,8 +257,8 @@ function readTablesIntoState() {
     const id = row.dataset.id || getId();
     const label = row.querySelector('[data-field="label"]').value || 'Vergoeding';
     const amount = parseNumber(row.querySelector('[data-field="amount"]').value);
-    const taxable = row.querySelector('[data-field="taxable"]').checked;
-    return { id, label, amount, taxable };
+    const taxableRate = clamp(parseNumber(row.querySelector('[data-field="taxableRate"]').value), 0, 100);
+    return { id, label, amount, taxableRate };
   });
 
   const deductRows = document.querySelectorAll('#deductionsTableBody tr');
@@ -268,8 +266,8 @@ function readTablesIntoState() {
     const id = row.dataset.id || getId();
     const label = row.querySelector('[data-field="label"]').value || 'Inhouding';
     const amount = parseNumber(row.querySelector('[data-field="amount"]').value);
-    const taxable = row.querySelector('[data-field="taxable"]').checked;
-    return { id, label, amount, taxable };
+    const taxableRate = clamp(parseNumber(row.querySelector('[data-field="taxableRate"]').value), 0, 100);
+    return { id, label, amount, taxableRate };
   });
 }
 
@@ -329,13 +327,13 @@ function addReimbursement() {
     id: getId(),
     label: 'Representatie',
     amount: 0,
-    taxable: false
+    taxableRate: 0
   });
   renderReimbursementsTable(state.reimbursements);
 }
 
 function addDeduction() {
-  state.deductions.push({ id: getId(), label: 'Inhouding', amount: 0, taxable: false });
+  state.deductions.push({ id: getId(), label: 'Inhouding', amount: 0, taxableRate: 0 });
   renderDeductionsTable(state.deductions);
 }
 
@@ -478,10 +476,10 @@ function runSelfTests() {
     rates: { standby: 2, mult150: 1.5, mult200: 2 },
     hours: { normal: 0, ot150: 10, ot200: 5, standby: 8 },
     reimbursements: [
-      { id: 'a', label: 'Reiskosten', amount: 50, taxable: false },
-      { id: 'b', label: 'Bonus', amount: 100, taxable: true }
+      { id: 'a', label: 'Reiskosten', amount: 50, taxableRate: 0 },
+      { id: 'b', label: 'Bonus', amount: 100, taxableRate: 100 }
     ],
-    deductions: [{ id: 'c', label: 'Pensioen', amount: 80 }]
+    deductions: [{ id: 'c', label: 'Pensioen', amount: 80, taxableRate: 0 }]
   };
   const result = calculate(exampleState);
   const expectedGross = (10 * 20 * 1.5) + (5 * 20 * 2) + (8 * 2) + 150;
