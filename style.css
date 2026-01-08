@@ -130,13 +130,6 @@ button.ghost {
 .line { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
 .line.total { border-top: 1px solid var(--border); padding-top: 0.5rem; }
 .line strong { font-size: 1.05rem; }
-.calc-summary { grid-column: 1 / -1; }
-.calculation-summary {
-  margin: 0;
-  font-weight: 600;
-  font-size: 1.05rem;
-  color: var(--text);
-}
 
 .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: flex-start; }
 .calc-steps {
