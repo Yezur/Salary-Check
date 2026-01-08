@@ -1,13 +1,14 @@
 # Salary Check (client-side)
 https://yezur.github.io/Salary-Check/
 
-Een eenvoudige, volledig client-side webapp die per maand bruto betalingen en inhoudingen rond overwerk en standby berekent. Overuren worden belast met een vast tarief (50,33%), terwijl standby onbelast blijft. Alle data blijft in de browser (localStorage); er is geen backend of tracking.
+Een eenvoudige, volledig client-side webapp om per periode een salarisindicatie te maken. Je vult uurloon, standby-tarief, overwerkmultipliers en uren in, plus eventuele vergoedingen/inhoudingen. De app berekent bruto betalingen, belasting over overuren (50,33%), onbelaste onderdelen en het nettoresultaat. Alle data blijft in de browser (localStorage); er is geen backend of tracking.
 
 ## Wat kun je ermee?
 - Uurloon, standby-tarief en overwerkmultipliers invullen.
 - Uren registreren voor normaal, 150% en 200% overwerk, plus standby.
 - Vergoedingen (belast/onbelast) en inhoudingen beheren.
 - Automatische berekening van belasting over overuren (50,33%).
+- Totale bruto, onbelaste onderdelen en netto inzichtelijk maken.
 - CSV-download en print/PDF-export.
 - Autosave naar localStorage en reset naar defaults.
 
