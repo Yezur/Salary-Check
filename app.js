@@ -211,6 +211,11 @@ function renderTotals(totals) {
   document.getElementById('totalsNonTaxable').textContent = formatCurrency(totals.non_taxable);
 }
 
+function renderCalculationSummary(totals) {
+  const summary = `Netto = ${formatCurrency(totals.gross)} - ${formatCurrency(totals.deductions)} = ${formatCurrency(totals.net)}`;
+  document.getElementById('calculationSummary').textContent = summary;
+}
+
 function renderHoursSummary(hours, workedDays) {
   document.getElementById('summaryWorkedDays').textContent = formatHours(workedDays);
   document.getElementById('summaryNormalHours').textContent = formatHours(hours.normal);
@@ -313,6 +318,7 @@ function render(result, options = {}) {
   renderEarnings(result.earnings);
   renderDeductions(result.deductions);
   renderTotals(result.totals);
+  renderCalculationSummary(result.totals);
   renderHoursSummary(state.hours, state.workedDays);
   if (!skipReimbursementsTable) {
     renderReimbursementsTable(state.reimbursements);
