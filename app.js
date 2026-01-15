@@ -3,7 +3,6 @@ import { DEFAULTS, LIMITS } from './config.js';
 const STORAGE_KEY = 'paycalc:v1';
 const SAVE_DEBOUNCE_MS = 300;
 const HOURS_PER_DAY = 8;
-const OVERTIME_TAX_RATE = 0.5033;
 
 const currencyFormatter = new Intl.NumberFormat('nl-NL', {
   style: 'currency',
@@ -20,7 +19,8 @@ const state = {
   rates: {
     standby: DEFAULTS.standbyRate,
     mult150: DEFAULTS.mult150,
-    mult200: DEFAULTS.mult200
+    mult200: DEFAULTS.mult200,
+    overtimeTaxRate: 50.33
   },
   hours: {
     normal: 0,
@@ -113,6 +113,9 @@ function sanitizeRates(rates) {
   if ('mult200' in rates) {
     safeRates.mult200 = clamp(parseNumber(rates.mult200) || DEFAULTS.mult200, 1, 5);
   }
+  if ('overtimeTaxRate' in rates) {
+    safeRates.overtimeTaxRate = clamp(parseNumber(rates.overtimeTaxRate), 0, 100);
+  }
   return safeRates;
 }
 
@@ -176,7 +179,9 @@ function calculate(currentState) {
   const nonTaxableReimbursements = reimbursementsTotal;
 
   const grossTotal = wageBase + reimbursementsTotal;
-  const overtimeTax = (ot150Pay + ot200Pay) * OVERTIME_TAX_RATE;
+  const overtimeTaxRateRaw = clamp(parseNumber(currentState.rates?.overtimeTaxRate), 0, 100);
+  const overtimeTaxRate = overtimeTaxRateRaw / 100;
+  const overtimeTax = (ot150Pay + ot200Pay) * overtimeTaxRate;
   const manualTaxTotal = manualTaxReimbursements + manualTaxDeductions;
   const earnings = [
     { label: 'Overwerk 150%', amount: ot150Pay },
@@ -185,7 +190,7 @@ function calculate(currentState) {
     { label: 'Vergoedingen', amount: reimbursementsTotal }
   ];
   const deductions = [
-    { label: 'Belasting overuren 50,33%', amount: overtimeTax },
+    { label: `Belasting overuren (${overtimeTaxRateRaw.toFixed(2)}%)`, amount: overtimeTax },
     ...manualTaxLines,
     ...currentState.deductions.map((d) => ({ label: d.label, amount: d.amount }))
   ];
@@ -244,6 +249,10 @@ function renderTotals(totals) {
   dom.totalsOvertimeTax.textContent = formatCurrency(totals.overtime_tax);
   dom.totalsManualTax.textContent = formatCurrency(totals.manual_tax_total);
   dom.totalsNonTaxable.textContent = formatCurrency(totals.non_taxable);
+  if (dom.totalsOvertimeTaxLabel) {
+    const overtimeTaxRate = clamp(parseNumber(state.rates.overtimeTaxRate), 0, 100);
+    dom.totalsOvertimeTaxLabel.textContent = `Belasting overuren (${overtimeTaxRate.toFixed(2)}%)`;
+  }
 }
 
 function renderHoursSummary(hours, workedDays) {
@@ -300,6 +309,7 @@ function readFormIntoState() {
   state.rates.standby = Math.max(0, parseNumber(dom.standbyRate.value));
   state.rates.mult150 = clamp(parseNumber(dom.mult150.value) || DEFAULTS.mult150, 1, 5);
   state.rates.mult200 = clamp(parseNumber(dom.mult200.value) || DEFAULTS.mult200, 1, 5);
+  state.rates.overtimeTaxRate = clamp(parseNumber(dom.overtimeTaxRate.value), 0, 100);
 
   const normalHoursInput = dom.hNormal;
   const workedDaysInput = dom.workedDays;
@@ -386,6 +396,7 @@ function exportCSV(result) {
   const exportState = { ...state, salary: { ...state.salary, monthly: 0 } };
   const exportResult = calculate(exportState);
   const exportEarnings = exportResult.earnings.filter((line) => line.label !== 'Maandsalaris');
+  const exportOvertimeTaxRate = clamp(parseNumber(exportState.rates.overtimeTaxRate), 0, 100);
   const rows = [
     ['label', 'type', 'amount'],
     ...exportEarnings.map((line) => [line.label, 'earning', line.amount.toFixed(2)]),
@@ -395,7 +406,11 @@ function exportCSV(result) {
     ['Totaal inhoudingen', 'total', exportResult.totals.deductions.toFixed(2)],
     ['Totaal bruto', 'total', exportResult.totals.gross.toFixed(2)],
     ['Totaal netto', 'total', exportResult.totals.net.toFixed(2)],
-    ['Belasting overuren 50,33%', 'total', exportResult.totals.overtime_tax.toFixed(2)],
+    [
+      `Belasting overuren (${exportOvertimeTaxRate.toFixed(2)}%)`,
+      'total',
+      exportResult.totals.overtime_tax.toFixed(2)
+    ],
     ['Belasting vergoedingen (handmatig)', 'total', exportResult.totals.manual_tax_reimbursements.toFixed(2)],
     ['Belasting inhoudingen (handmatig)', 'total', exportResult.totals.manual_tax_deductions.toFixed(2)],
     ['Belasting totaal (handmatig)', 'total', exportResult.totals.manual_tax_total.toFixed(2)],
@@ -430,7 +445,8 @@ function resetAll() {
   state.rates = {
     standby: DEFAULTS.standbyRate,
     mult150: DEFAULTS.mult150,
-    mult200: DEFAULTS.mult200
+    mult200: DEFAULTS.mult200,
+    overtimeTaxRate: 50.33
   };
   state.hours = { normal: 0, ot150: 0, ot200: 0, standby: 0 };
   state.workedDays = 0;
@@ -445,6 +461,7 @@ function hydrateForm() {
   dom.standbyRate.value = state.rates.standby;
   dom.mult150.value = state.rates.mult150;
   dom.mult200.value = state.rates.mult200;
+  dom.overtimeTaxRate.value = state.rates.overtimeTaxRate;
   dom.workedDays.value = state.workedDays;
   const normalHours = state.workedDays > 0 ? state.workedDays * HOURS_PER_DAY : state.hours.normal;
   state.hours.normal = normalHours;
@@ -457,7 +474,9 @@ function hydrateForm() {
 }
 
 function attachEventListeners() {
-  document.querySelectorAll('#hourlyRate, #standbyRate, #mult150, #mult200, #workedDays, #hNormal, #h150, #h200, #hStandby').forEach((el) => {
+  document.querySelectorAll(
+    '#hourlyRate, #standbyRate, #mult150, #mult200, #overtimeTaxRate, #workedDays, #hNormal, #h150, #h200, #hStandby'
+  ).forEach((el) => {
     el.addEventListener('input', recalc);
     el.addEventListener('change', recalc);
   });
@@ -497,7 +516,7 @@ function attachEventListeners() {
 function runSelfTests() {
   const exampleState = {
     salary: { hourly: 20 },
-    rates: { standby: 2, mult150: 1.5, mult200: 2 },
+    rates: { standby: 2, mult150: 1.5, mult200: 2, overtimeTaxRate: 40 },
     hours: { normal: 0, ot150: 10, ot200: 5, standby: 8 },
     reimbursements: [
       { id: 'a', label: 'Reiskosten', amount: 50, taxRate: 0 },
@@ -507,21 +526,21 @@ function runSelfTests() {
   };
   const result = calculate(exampleState);
   const expectedGross = (10 * 20 * 1.5) + (5 * 20 * 2) + (8 * 2) + 150;
-  const expectedOvertimeTax = ((10 * 20 * 1.5) + (5 * 20 * 2)) * OVERTIME_TAX_RATE;
+  const expectedOvertimeTax = ((10 * 20 * 1.5) + (5 * 20 * 2)) * 0.4;
   const expectedManualTaxReimbursements = 100 * 0.1;
   const expectedManualTaxDeductions = 80 * 0.25;
   const expectedDeductionsTotal = expectedOvertimeTax + expectedManualTaxReimbursements + expectedManualTaxDeductions + 80;
   const expectedNet = expectedGross - expectedDeductionsTotal;
   const hourlyState = {
     salary: { hourly: 20 },
-    rates: { standby: 2, mult150: 1.5, mult200: 2 },
+    rates: { standby: 2, mult150: 1.5, mult200: 2, overtimeTaxRate: 40 },
     hours: { normal: 150, ot150: 6, ot200: 4, standby: 3 },
     reimbursements: [],
     deductions: []
   };
   const hourlyResult = calculate(hourlyState);
   const hourlyExpectedGross = (6 * 20 * 1.5) + (4 * 20 * 2) + (3 * 2);
-  const hourlyExpectedOvertimeTax = ((6 * 20 * 1.5) + (4 * 20 * 2)) * OVERTIME_TAX_RATE;
+  const hourlyExpectedOvertimeTax = ((6 * 20 * 1.5) + (4 * 20 * 2)) * 0.4;
   const hourlyExpectedDeductionsTotal = hourlyExpectedOvertimeTax;
   const hourlyExpectedNet = hourlyExpectedGross - hourlyExpectedDeductionsTotal;
   const allGood = Math.abs(result.totals.gross - expectedGross) < 0.001 &&
@@ -546,6 +565,7 @@ function init() {
   dom.standbyRate = document.getElementById('standbyRate');
   dom.mult150 = document.getElementById('mult150');
   dom.mult200 = document.getElementById('mult200');
+  dom.overtimeTaxRate = document.getElementById('overtimeTaxRate');
   dom.workedDays = document.getElementById('workedDays');
   dom.hNormal = document.getElementById('hNormal');
   dom.h150 = document.getElementById('h150');
@@ -567,6 +587,7 @@ function init() {
   dom.totalsGross = document.getElementById('totalsGross');
   dom.totalsNet = document.getElementById('totalsNet');
   dom.totalsOvertimeTax = document.getElementById('totalsOvertimeTax');
+  dom.totalsOvertimeTaxLabel = document.getElementById('totalsOvertimeTaxLabel');
   dom.totalsManualTax = document.getElementById('totalsManualTax');
   dom.totalsNonTaxable = document.getElementById('totalsNonTaxable');
   dom.summaryWorkedDays = document.getElementById('summaryWorkedDays');
