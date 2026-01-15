@@ -12,7 +12,7 @@
     <div>
       <h1>Salarisindicatie per periode</h1>
       <p>Maak een salarisindicatie per periode op basis van uurloon, overwerk, standby en vergoedingen/inhoudingen. Je ziet bruto, onbelast en netto—alles draait lokaal in je browser.</p>
-      <p class="disclaimer">Let op: overuren worden belast met een vast tarief van 50,33%. Standby is onbelast; overige inhoudingen voeg je handmatig toe.</p>
+      <p class="disclaimer">Let op: overuren worden belast met een instelbaar tarief. Standby is onbelast; overige inhoudingen voeg je handmatig toe.</p>
     </div>
     <div class="meta">
       <span class="pill">Client-side</span>
@@ -37,6 +37,9 @@
         </label>
         <label for="mult200">Overwerk multiplier 200%
           <input type="number" id="mult200" min="1" max="5" step="0.05" placeholder="2,00" />
+        </label>
+        <label for="overtimeTaxRate">Belasting overuren (%)
+          <input type="number" id="overtimeTaxRate" min="0" max="100" step="0.01" placeholder="50,33" />
         </label>
       </div>
     </section>
@@ -108,7 +111,7 @@
         <div class="section-header">
           <h2 id="deductions-title">Inhoudingen</h2>
         </div>
-        <small>Toont aparte regel voor belasting overuren 50,33% en handmatige inhoudingen.</small>
+        <small>Toont aparte regel voor belasting overuren en handmatige inhoudingen.</small>
         <div id="deductionLines" class="line-items"></div>
       </div>
 
@@ -119,7 +122,7 @@
         <div class="line"><span>Totaal betalingen (overuren + standby)</span><strong id="totalsEarnings">€ 0,00</strong></div>
         <div class="line"><span>Totaal vergoedingen</span><strong id="totalsReimbursements">€ 0,00</strong></div>
         <div class="line"><span>Totaal inhoudingen</span><strong id="totalsDeductions">€ 0,00</strong></div>
-        <div class="line"><span>Belasting overuren 50,33%</span><strong id="totalsOvertimeTax">€ 0,00</strong></div>
+        <div class="line"><span id="totalsOvertimeTaxLabel">Belasting overuren</span><strong id="totalsOvertimeTax">€ 0,00</strong></div>
         <div class="line"><span>Handmatige belasting</span><strong id="totalsManualTax">€ 0,00</strong></div>
         <div class="line"><span>Onbelaste vergoedingen</span><strong id="totalsNonTaxable">€ 0,00</strong></div>
         <div class="line"><span>Totaal netto</span><strong id="totalsNet">€ 0,00</strong></div>
