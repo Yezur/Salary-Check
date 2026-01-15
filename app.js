@@ -54,14 +54,17 @@ function getId() {
   return `id-${Math.random().toString(16).slice(2)}`;
 }
 
-function normalizeDeductions(items) {
+function normalizeLineItems(items, fallbackLabel) {
   if (!Array.isArray(items)) return [];
-  return items.map((item) => ({
-    id: item.id || getId(),
-    label: item.label || 'Inhouding',
-    amount: parseNumber(item.amount),
-    taxableRate: clamp(parseNumber(item.taxableRate), 0, 100)
-  }));
+  return items.map((item) => {
+    const legacyRate = item.taxRate ?? item.taxableRate;
+    return {
+      id: item.id || getId(),
+      label: item.label || fallbackLabel,
+      amount: parseNumber(item.amount),
+      taxRate: clamp(parseNumber(legacyRate), 0, 100)
+    };
+  });
 }
 
 function loadFromStorage() {
@@ -83,6 +86,12 @@ function loadFromStorage() {
 function mergeState(saved) {
   if (!saved || typeof saved !== 'object') return;
   state.rates = sanitizeRates(saved.rates);
+  if (saved.reimbursements) {
+    state.reimbursements = normalizeLineItems(saved.reimbursements, 'Vergoeding');
+  }
+  if (saved.deductions) {
+    state.deductions = normalizeLineItems(saved.deductions, 'Inhouding');
+  }
 }
 
 function scheduleSave() {
@@ -109,7 +118,9 @@ function sanitizeRates(rates) {
 
 function getPersistedState() {
   return {
-    rates: sanitizeRates(state.rates)
+    rates: sanitizeRates(state.rates),
+    reimbursements: normalizeLineItems(state.reimbursements, 'Vergoeding'),
+    deductions: normalizeLineItems(state.deductions, 'Inhouding')
   };
 }
 
@@ -138,24 +149,35 @@ function calculate(currentState) {
   const ot200Pay = currentState.hours.ot200 * baseHourly * currentState.rates.mult200;
   const standbyPay = currentState.hours.standby * currentState.rates.standby;
   let reimbursementsTotal = 0;
-  let taxableReimbursements = 0;
+  let manualTaxReimbursements = 0;
+  const manualTaxLines = [];
   currentState.reimbursements.forEach((item) => {
+    const taxRate = clamp(parseNumber(item.taxRate ?? item.taxableRate), 0, 100);
     reimbursementsTotal += item.amount;
-    taxableReimbursements += item.amount * (parseNumber(item.taxableRate) / 100);
+    if (taxRate > 0) {
+      const taxAmount = item.amount * (taxRate / 100);
+      manualTaxReimbursements += taxAmount;
+      manualTaxLines.push({ label: `Belasting: ${item.label}`, amount: taxAmount });
+    }
   });
   let deductionsTotal = 0;
-  let taxableDeductions = 0;
+  let manualTaxDeductions = 0;
   currentState.deductions.forEach((item) => {
+    const taxRate = clamp(parseNumber(item.taxRate ?? item.taxableRate), 0, 100);
     deductionsTotal += item.amount;
-    taxableDeductions += item.amount * (parseNumber(item.taxableRate) / 100);
+    if (taxRate > 0) {
+      const taxAmount = item.amount * (taxRate / 100);
+      manualTaxDeductions += taxAmount;
+      manualTaxLines.push({ label: `Belasting: ${item.label}`, amount: taxAmount });
+    }
   });
 
   const wageBase = ot150Pay + ot200Pay + standbyPay;
-  const nonTaxableReimbursements = reimbursementsTotal - taxableReimbursements;
+  const nonTaxableReimbursements = reimbursementsTotal;
 
   const grossTotal = wageBase + reimbursementsTotal;
-  const taxableWage = Math.max(0, taxableReimbursements - taxableDeductions);
   const overtimeTax = (ot150Pay + ot200Pay) * OVERTIME_TAX_RATE;
+  const manualTaxTotal = manualTaxReimbursements + manualTaxDeductions;
   const earnings = [
     { label: 'Overwerk 150%', amount: ot150Pay },
     { label: 'Overwerk 200%', amount: ot200Pay },
@@ -164,6 +186,7 @@ function calculate(currentState) {
   ];
   const deductions = [
     { label: 'Belasting overuren 50,33%', amount: overtimeTax },
+    ...manualTaxLines,
     ...currentState.deductions.map((d) => ({ label: d.label, amount: d.amount }))
   ];
   const totalEarnings = wageBase;
@@ -179,9 +202,11 @@ function calculate(currentState) {
       deductions: totalDeductions,
       gross: grossTotal,
       net: netTotal,
-      taxable: taxableWage,
       overtime_tax: overtimeTax,
-      non_taxable: nonTaxableReimbursements
+      non_taxable: nonTaxableReimbursements,
+      manual_tax_reimbursements: manualTaxReimbursements,
+      manual_tax_deductions: manualTaxDeductions,
+      manual_tax_total: manualTaxTotal
     }
   };
 }
@@ -217,6 +242,7 @@ function renderTotals(totals) {
   dom.totalsGross.textContent = formatCurrency(totals.gross);
   dom.totalsNet.textContent = formatCurrency(totals.net);
   dom.totalsOvertimeTax.textContent = formatCurrency(totals.overtime_tax);
+  dom.totalsManualTax.textContent = formatCurrency(totals.manual_tax_total);
   dom.totalsNonTaxable.textContent = formatCurrency(totals.non_taxable);
 }
 
@@ -232,12 +258,13 @@ function renderTable(body, items) {
   body.innerHTML = '';
   const fragment = document.createDocumentFragment();
   items.forEach((item) => {
+    const taxRate = item.taxRate ?? item.taxableRate ?? 0;
     const row = document.createElement('tr');
     row.dataset.id = item.id;
     row.innerHTML = `
       <td><input type="text" value="${item.label}" data-field="label" aria-label="Label" /></td>
       <td><input type="number" step="0.01" value="${item.amount}" data-field="amount" aria-label="Bedrag" /></td>
-      <td><input type="number" min="0" max="100" step="0.1" value="${item.taxableRate ?? 0}" data-field="taxableRate" aria-label="Belastbaar percentage" /></td>
+      <td><input type="number" min="0" max="100" step="0.1" value="${taxRate}" data-field="taxRate" aria-label="Belasting percentage" /></td>
       <td class="actions"><button type="button" class="ghost" data-action="remove">✕</button></td>
     `;
     fragment.appendChild(row);
@@ -258,8 +285,8 @@ function readTableIntoState(body, fallbackLabel) {
     const id = row.dataset.id || getId();
     const label = row.querySelector('[data-field="label"]').value || fallbackLabel;
     const amount = parseNumber(row.querySelector('[data-field="amount"]').value);
-    const taxableRate = clamp(parseNumber(row.querySelector('[data-field="taxableRate"]').value), 0, 100);
-    return { id, label, amount, taxableRate };
+    const taxRate = clamp(parseNumber(row.querySelector('[data-field="taxRate"]').value), 0, 100);
+    return { id, label, amount, taxRate };
   });
 }
 
@@ -323,13 +350,13 @@ function addReimbursement() {
     id: getId(),
     label: 'Representatie',
     amount: 0,
-    taxableRate: 0
+    taxRate: 0
   });
   renderReimbursementsTable(state.reimbursements);
 }
 
 function addDeduction() {
-  state.deductions.push({ id: getId(), label: 'Inhouding', amount: 0, taxableRate: 0 });
+  state.deductions.push({ id: getId(), label: 'Inhouding', amount: 0, taxRate: 0 });
   renderDeductionsTable(state.deductions);
 }
 
@@ -369,6 +396,9 @@ function exportCSV(result) {
     ['Totaal bruto', 'total', exportResult.totals.gross.toFixed(2)],
     ['Totaal netto', 'total', exportResult.totals.net.toFixed(2)],
     ['Belasting overuren 50,33%', 'total', exportResult.totals.overtime_tax.toFixed(2)],
+    ['Belasting vergoedingen (handmatig)', 'total', exportResult.totals.manual_tax_reimbursements.toFixed(2)],
+    ['Belasting inhoudingen (handmatig)', 'total', exportResult.totals.manual_tax_deductions.toFixed(2)],
+    ['Belasting totaal (handmatig)', 'total', exportResult.totals.manual_tax_total.toFixed(2)],
     ['Onbelaste vergoedingen', 'info', exportResult.totals.non_taxable.toFixed(2)],
     ['Timestamp', 'meta', new Date().toISOString()]
   ];
@@ -470,16 +500,17 @@ function runSelfTests() {
     rates: { standby: 2, mult150: 1.5, mult200: 2 },
     hours: { normal: 0, ot150: 10, ot200: 5, standby: 8 },
     reimbursements: [
-      { id: 'a', label: 'Reiskosten', amount: 50, taxableRate: 0 },
-      { id: 'b', label: 'Bonus', amount: 100, taxableRate: 100 }
+      { id: 'a', label: 'Reiskosten', amount: 50, taxRate: 0 },
+      { id: 'b', label: 'Bonus', amount: 100, taxRate: 10 }
     ],
-    deductions: [{ id: 'c', label: 'Pensioen', amount: 80, taxableRate: 0 }]
+    deductions: [{ id: 'c', label: 'Pensioen', amount: 80, taxRate: 25 }]
   };
   const result = calculate(exampleState);
   const expectedGross = (10 * 20 * 1.5) + (5 * 20 * 2) + (8 * 2) + 150;
-  const expectedTaxable = 100;
   const expectedOvertimeTax = ((10 * 20 * 1.5) + (5 * 20 * 2)) * OVERTIME_TAX_RATE;
-  const expectedDeductionsTotal = expectedOvertimeTax + 80;
+  const expectedManualTaxReimbursements = 100 * 0.1;
+  const expectedManualTaxDeductions = 80 * 0.25;
+  const expectedDeductionsTotal = expectedOvertimeTax + expectedManualTaxReimbursements + expectedManualTaxDeductions + 80;
   const expectedNet = expectedGross - expectedDeductionsTotal;
   const hourlyState = {
     salary: { hourly: 20 },
@@ -490,22 +521,21 @@ function runSelfTests() {
   };
   const hourlyResult = calculate(hourlyState);
   const hourlyExpectedGross = (6 * 20 * 1.5) + (4 * 20 * 2) + (3 * 2);
-  const hourlyExpectedTaxable = 0;
   const hourlyExpectedOvertimeTax = ((6 * 20 * 1.5) + (4 * 20 * 2)) * OVERTIME_TAX_RATE;
   const hourlyExpectedDeductionsTotal = hourlyExpectedOvertimeTax;
   const hourlyExpectedNet = hourlyExpectedGross - hourlyExpectedDeductionsTotal;
   const allGood = Math.abs(result.totals.gross - expectedGross) < 0.001 &&
-    Math.abs(result.totals.taxable - expectedTaxable) < 0.001 &&
     Math.abs(result.totals.deductions - expectedDeductionsTotal) < 0.001 &&
     Math.abs(result.totals.net - expectedNet) < 0.001 &&
     Math.abs(result.totals.overtime_tax - expectedOvertimeTax) < 0.001 &&
+    Math.abs(result.totals.manual_tax_reimbursements - expectedManualTaxReimbursements) < 0.001 &&
+    Math.abs(result.totals.manual_tax_deductions - expectedManualTaxDeductions) < 0.001 &&
     Math.abs(hourlyResult.totals.gross - hourlyExpectedGross) < 0.001 &&
-    Math.abs(hourlyResult.totals.taxable - hourlyExpectedTaxable) < 0.001 &&
     Math.abs(hourlyResult.totals.deductions - hourlyExpectedDeductionsTotal) < 0.001 &&
     Math.abs(hourlyResult.totals.net - hourlyExpectedNet) < 0.001 &&
     Math.abs(hourlyResult.totals.overtime_tax - hourlyExpectedOvertimeTax) < 0.001;
   if (!allGood) {
-    console.error('Selftest failed', { result, expectedGross, expectedTaxable, expectedDeductionsTotal });
+    console.error('Selftest failed', { result, expectedGross, expectedDeductionsTotal });
   } else {
     console.info('Selftest ok');
   }
@@ -537,6 +567,7 @@ function init() {
   dom.totalsGross = document.getElementById('totalsGross');
   dom.totalsNet = document.getElementById('totalsNet');
   dom.totalsOvertimeTax = document.getElementById('totalsOvertimeTax');
+  dom.totalsManualTax = document.getElementById('totalsManualTax');
   dom.totalsNonTaxable = document.getElementById('totalsNonTaxable');
   dom.summaryWorkedDays = document.getElementById('summaryWorkedDays');
   dom.summaryNormalHours = document.getElementById('summaryNormalHours');
